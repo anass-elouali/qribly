@@ -46,6 +46,7 @@ class OfferController extends Controller
      */
     public function update(UpdateOfferRequest $request, Offer $offer)
     {
+        $this->authorize('update', $offer);
         $offer->update($request->validated());
         return response()->json($offer->fresh(), 200);
     }
@@ -55,6 +56,7 @@ class OfferController extends Controller
      */
     public function destroy(Offer $offer)
     {
+        $this->authorize('delete', $offer);
         $offer->delete();
          return response()->json([
             'message' => 'Offer deleted successfully'
