@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Http\Requests\RegisterRequest;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
+use App\Http\Requests\LoginRequest;
+use Illuminate\Support\Facades\Auth;
 
 class AuthController extends Controller
 {
@@ -24,5 +26,25 @@ class AuthController extends Controller
             'token' => $token,
         ], 201);
     }
+
+    public function login(LoginRequest $request): JsonResponse
+    {
+        if (!Auth::attempt($request->validated())) {
+            return response()->json([
+                'message' => 'Invalid credentials'
+            ], 401);
+        }
+
+        /** @var User $user */
+        $user = Auth::user();
+
+        $token = $user->createToken('api')->plainTextToken;
+
+        return response()->json([
+            'message' => 'Login successful',
+            'user' => $user,
+            'token' => $token,
+        ]);
+    }   
 
 }

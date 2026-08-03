@@ -6,5 +6,10 @@ use App\Http\Controllers\OfferController;
 use App\Http\Controllers\AuthController;
 
 Route::apiResource('categories', CategoryController::class);
-Route::apiResource('offers', OfferController::class);
 Route::post('register', [AuthController::class, 'register']);
+Route::post('login', [AuthController::class, 'login']);
+
+Route::middleware('auth:sanctum')->group(function () {
+    Route::apiResource('offers', OfferController::class);
+});
+

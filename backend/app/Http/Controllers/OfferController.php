@@ -25,9 +25,7 @@ class OfferController extends Controller
      */
     public function store(StoreOfferRequest $request)
     {
-        $user = User::first();
-
-        $offer = $user->offers()->create(
+        $offer = $request->user()->offers()->create(
             $request->validated()
         );
 
