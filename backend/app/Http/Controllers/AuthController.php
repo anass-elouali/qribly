@@ -7,6 +7,7 @@ use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use App\Http\Requests\LoginRequest;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Http\Request;
 
 class AuthController extends Controller
 {
@@ -45,6 +46,16 @@ class AuthController extends Controller
             'user' => $user,
             'token' => $token,
         ]);
-    }   
+    }
+
+    public function logout(Request $request): JsonResponse
+    {
+        
+        $request->user()->currentAccessToken()->delete();
+
+        return response()->json([
+            'message' => 'Logout successful'
+        ]);
+    }
 
 }
