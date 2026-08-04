@@ -5,8 +5,9 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use App\Http\Requests\StoreOfferRequest;
 use App\Http\Requests\UpdateOfferRequest;
+use App\Http\Resources\OfferResource;
 use App\Models\Offer;
-use App\Models\User;
+
 
 
 class OfferController extends Controller
@@ -17,7 +18,7 @@ class OfferController extends Controller
     public function index()
     {
         $offers = Offer::all();
-        return response()->json($offers);
+        return OfferResource::collection($offers);
     }
 
     /**
@@ -29,7 +30,9 @@ class OfferController extends Controller
             $request->validated()
         );
 
-        return response()->json($offer, 201);
+        return (new OfferResource($offer))
+            ->response()
+            ->setStatusCode(201);
 
     }
 
@@ -38,7 +41,7 @@ class OfferController extends Controller
      */
     public function show(Offer $offer)
     {
-        return response()->json($offer);
+        return new OfferResource($offer);
     }
 
     /**
@@ -48,7 +51,8 @@ class OfferController extends Controller
     {
         $this->authorize('update', $offer);
         $offer->update($request->validated());
-        return response()->json($offer->fresh(), 200);
+
+        return (new OfferResource($offer));
     }
 
     /**
