@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Category;
 use Illuminate\Http\Request;
+use App\Http\Resources\CategoryResource;
 
 class CategoryController extends Controller
 {
@@ -13,7 +14,7 @@ class CategoryController extends Controller
     public function index()
     {
         $categories = Category::all();
-        return response()->json($categories);
+        return CategoryResource::collection($categories);
     }
 
     /**
@@ -35,7 +36,7 @@ class CategoryController extends Controller
 
         $category = Category::create($validated);
 
-        return response()->json($category, 201);
+        return new CategoryResource($category);
     }
 
     /**
@@ -43,7 +44,7 @@ class CategoryController extends Controller
      */
     public function show(Category $category)
     {
-        return response()->json($category);
+        return new CategoryResource($category);
     }
 
     /**
@@ -67,7 +68,7 @@ class CategoryController extends Controller
 
         $category->save();
 
-        return response()->json($category, 200);
+        return new CategoryResource($category);
     }
 
     /**

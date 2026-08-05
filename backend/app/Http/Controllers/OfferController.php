@@ -17,7 +17,9 @@ class OfferController extends Controller
      */
     public function index()
     {
-        $offers = Offer::latest()->paginate(10);
+        $offers = Offer::with(['category', 'user'])
+            ->latest()
+            ->paginate(10);
         return OfferResource::collection($offers);
     }
 
@@ -30,6 +32,8 @@ class OfferController extends Controller
             $request->validated()
         );
 
+        $offer->load(['category', 'user']);
+
         return (new OfferResource($offer))
             ->response()
             ->setStatusCode(201);
@@ -41,6 +45,7 @@ class OfferController extends Controller
      */
     public function show(Offer $offer)
     {
+        $offer->load(['category', 'user']);
         return new OfferResource($offer);
     }
 
@@ -51,6 +56,7 @@ class OfferController extends Controller
     {
         $this->authorize('update', $offer);
         $offer->update($request->validated());
+        $offer->load(['category', 'user']);
 
         return (new OfferResource($offer));
     }

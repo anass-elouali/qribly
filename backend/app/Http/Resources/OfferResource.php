@@ -19,7 +19,15 @@ class OfferResource extends JsonResource
             'title' => $this->title,
             'description' => $this->description,
             'price' => $this->price,
-            'category_id' => $this->category_id,
+            
+            'category' => CategoryResource::make(
+                $this->whenLoaded('category')
+            ),
+            
+            'owner' => UserResource::make(
+                $this->whenLoaded('user')
+            ),
+            
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
         ];
