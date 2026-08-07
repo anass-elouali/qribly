@@ -1,13 +1,9 @@
-<script setup lang="ts"></script>
+<script setup lang="ts">
+  import { RouterView } from 'vue-router';
+</script>
 
 <template>
-  <div class="min-h-screen flex items-center justify-center bg-slate-100">
-    <div class="rounded-xl bg-white p-8 shadow-lg">
-      <h1 class="text-4xl font-bold text-blue-500">Qribly</h1>
-
-      <p class="mt-3 text-gray-600">Vue + Tailwind is working.</p>
-    </div>
-  </div>
+  <RouterView />
 </template>
 
-<style scoped></style>
+<style scoped> </style>
