@@ -21,6 +21,14 @@ class OfferController extends Controller
 
         $query->when($request->category, function($query) use ($request){
             $query->where('category_id', $request->category);
+            
+        });
+
+        $query->when($request->q, function ($query) use ($request) {
+            $query->where(function ($query) use ($request) {
+                $query->where('title', 'ilike', '%' . $request->q . '%')
+                        ->orWhere('description', 'ilike', '%' . $request->q . '%');
+            });
         });
 
         $offers = $query->latest()->paginate(10);
