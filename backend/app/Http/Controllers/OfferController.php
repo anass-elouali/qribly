@@ -17,11 +17,8 @@ class OfferController extends Controller
      */
     public function index(Request $request)
     {
-        $query = Offer::with(['category', 'user'])
-            ->select('offers.*')
-            ->selectRaw('ST_Y(location::geometry) AS latitude')
-            ->selectRaw('ST_X(location::geometry) AS longitude');
-            
+        $query = Offer::withLocationCoordinates()
+            ->with(['category', 'user']);
 
         $query->when($request->category, function($query) use ($request){
             $query->where('category_id', $request->category);
@@ -75,7 +72,11 @@ class OfferController extends Controller
      */
     public function show(Offer $offer)
     {
-        $offer->load(['category', 'user']);
+        $offer = Offer::withLocationCoordinates()
+            ->with(['category', 'user'])
+            ->findOrFail($offer->id);
+
+
         return new OfferResource($offer);
     }
 
@@ -85,8 +86,29 @@ class OfferController extends Controller
     public function update(UpdateOfferRequest $request, Offer $offer)
     {
         $this->authorize('update', $offer);
-        $offer->update($request->validated());
-        $offer->load(['category', 'user']);
+
+        $data = $request->validated();
+
+        if (isset($data['location'])) {
+            $latitude = $data['location']['latitude'];
+            $longitude = $data['location']['longitude'];
+
+            unset($data['location']);
+
+            $location = DB::selectOne(
+                'SELECT ST_SetSRID(ST_MakePoint(?, ?), 4326)::geography AS location',
+                [$longitude, $latitude]
+            )->location;
+
+            $data['location'] = $location;
+        }
+
+        $offer->update($data);
+
+        $offer = Offer::withLocationCoordinates()
+            ->with(['category', 'user'])
+            ->findOrFail($offer->id);
+
 
         return (new OfferResource($offer));
     }
@@ -102,5 +124,7 @@ class OfferController extends Controller
             'message' => 'Offer deleted successfully'
         ]);
     }
+
+   
     
 }

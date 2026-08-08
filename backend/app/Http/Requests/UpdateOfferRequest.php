@@ -36,6 +36,10 @@ class UpdateOfferRequest extends FormRequest
             'is_negotiable' => 'required|boolean',
 
             'status' => 'required|in:active,reserved,sold,inactive',
+
+            'location' => ['sometimes', 'array'],
+            'location.latitude' => ['required_with:location', 'numeric', 'between:-90,90'],
+            'location.longitude' => ['required_with:location', 'numeric', 'between:-180,180'],
         ];
     }
 }

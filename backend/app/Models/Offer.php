@@ -27,4 +27,12 @@ class Offer extends Model
     {
         return $this->belongsTo(Category::class);
     }
+
+     public function scopeWithLocationCoordinates($query)
+    {
+        return $query
+            ->select('offers.*')
+            ->selectRaw('ST_Y(location::geometry) AS latitude')
+            ->selectRaw('ST_X(location::geometry) AS longitude');
+    }
 }
