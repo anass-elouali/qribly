@@ -33,6 +33,10 @@ class OfferResource extends JsonResource
             'owner' => UserResource::make(
                 $this->whenLoaded('user')
             ),
+
+            'distance' => isset($this->distance)
+                ? round($this->distance, 2)
+                : null,
             
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,

@@ -131,20 +131,22 @@ class OfferController extends Controller
         $longitude = $request->validated('longitude');
         $radius = $request->validated('radius') * 1000;
 
-        $point = "ST_SetSRID(ST_MakePoint(?, ?), 4326)::geography";
+        $point = 'ST_SetSRID(ST_MakePoint(?, ?), 4326)::geography';
 
         $offers = Offer::withLocationCoordinates()
             ->with(['category', 'user'])
+            ->selectRaw(
+                "ST_Distance(location, $point) AS distance",
+                [$longitude, $latitude]
+            )
             ->whereRaw(
                 "ST_DWithin(location, $point, ?)",
                 [$longitude, $latitude, $radius]
             )
-            ->latest()
+            ->orderBy('distance')
             ->paginate(10);
 
         return OfferResource::collection($offers);
     }
-
-   
     
 }
