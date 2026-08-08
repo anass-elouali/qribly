@@ -4,6 +4,7 @@ namespace App\Http\Resources;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Facades\DB;
 
 class OfferResource extends JsonResource
 {
@@ -19,6 +20,11 @@ class OfferResource extends JsonResource
             'title' => $this->title,
             'description' => $this->description,
             'price' => $this->price,
+
+            'location' => $this->location ? [
+                'latitude' => $this->latitude,
+                'longitude' => $this->longitude,
+            ]:null,
             
             'category' => CategoryResource::make(
                 $this->whenLoaded('category')

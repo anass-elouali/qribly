@@ -7,7 +7,7 @@ use App\Http\Requests\StoreOfferRequest;
 use App\Http\Requests\UpdateOfferRequest;
 use App\Http\Resources\OfferResource;
 use App\Models\Offer;
-
+use Illuminate\Support\Facades\DB;
 
 
 class OfferController extends Controller
@@ -17,7 +17,11 @@ class OfferController extends Controller
      */
     public function index(Request $request)
     {
-        $query = Offer::with(['category', 'user']);
+        $query = Offer::with(['category', 'user'])
+            ->select('offers.*')
+            ->selectRaw('ST_Y(location::geometry) AS latitude')
+            ->selectRaw('ST_X(location::geometry) AS longitude');
+            
 
         $query->when($request->category, function($query) use ($request){
             $query->where('category_id', $request->category);
@@ -42,9 +46,21 @@ class OfferController extends Controller
      */
     public function store(StoreOfferRequest $request)
     {
-        $offer = $request->user()->offers()->create(
-            $request->validated()
-        );
+        $data = $request->validated();
+
+        $latitude = $data['location']['latitude'];
+        $longitude = $data['location']['longitude'];
+
+        unset($data['location']);
+
+        $location = DB::selectOne(
+            'SELECT ST_SetSRID(ST_MakePoint(?, ?), 4326)::geography AS location',
+            [$longitude, $latitude]
+        )->location;
+
+        $data['location'] = $location;
+
+        $offer = $request->user()->offers()->create($data);
 
         $offer->load(['category', 'user']);
 

@@ -37,6 +37,10 @@ class StoreOfferRequest extends FormRequest
             'is_negotiable' => 'required|boolean',
 
             'status' => 'required|in:active,reserved,sold,inactive',
+            
+            'location' => ['required', 'array'],
+            'location.latitude' => ['required', 'numeric', 'between:-90,90'],
+            'location.longitude' => ['required', 'numeric', 'between:-180,180'],
         ];
     }
 }

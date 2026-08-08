@@ -15,6 +15,7 @@ class Offer extends Model
         'price',
         'is_negotiable',
         'status',
+        'location',
     ];
 
     public function user(): BelongsTo
