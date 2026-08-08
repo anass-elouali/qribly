@@ -1,10 +1,12 @@
 import DefaultLayout from '@/layouts/DefaultLayout.vue'
 import HomeView from '@/views/HomeView.vue'
 import { createRouter, createWebHistory } from 'vue-router'
+import { useAuthStore } from '@/stores/auth'
 
 const LoginView = () => import('@/views/LoginView.vue')
 const RegisterView = () => import('@/views/RegisterView.vue')
 const OfferDetailsView = () => import('@/views/OfferDetailsView.vue')
+const ProfileView = () => import('@/views/ProfileView.vue')
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -24,12 +26,23 @@ const router = createRouter({
           name: 'offer-details',
           component: OfferDetailsView,
         },
+        {
+          path:'profile',
+          name:'profile',
+          component:ProfileView,
+          meta: {
+            requiresAuth:true,
+          }
+        }
       ]
     },
      {
       path: '/login',
       name: 'login',
       component: LoginView,
+      meta: {
+        requiresGuest: true,
+      },
     },
     {
       path: '/register',
@@ -41,10 +54,22 @@ const router = createRouter({
   ],
 })
 
+
+
+
 router.beforeEach((to, from)=>{
-  console.log('Navigation...')
-  console.log('From:', from.fullPath)
-  console.log('To:', to.fullPath)
+  const authStore = useAuthStore()
+
+  if (to.meta.requiresAuth && !authStore.isAuthenticated) {
+    return {name: 'login'}
+  }
+
+
+  if (to.meta.requiresGuest && authStore.isAuthenticated) {
+    return { name: 'home' }
+  }
+
+  return true
 })
 
 export default router

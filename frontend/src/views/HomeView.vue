@@ -1,5 +1,14 @@
 <script>
     import { RouterLink } from 'vue-router';
+    import api from '@/services/api';
+
+    async function loadCategories() {
+      const response = await api.get('/offers')
+
+      console.log(response.data)
+    }
+
+  loadCategories()
 </script>
 
 <template>
