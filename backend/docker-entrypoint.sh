@@ -40,11 +40,16 @@ fi
 #     sleep 2
 # done
 
-echo "✅ PostgreSQL is ready."
+# echo "✅ PostgreSQL is ready."
 
 # Run migrations
 echo "🗄 Running migrations..."
 php artisan migrate --force
+
+
+echo "🌱 Seeding database..."
+php artisan db:seed --force
+
 
 echo "🌐 Starting Laravel..."
 exec php artisan serve --host=0.0.0.0 --port=8000

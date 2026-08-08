@@ -154,17 +154,22 @@ class OfferSeeder extends Seeder
                 [$data['longitude'], $data['latitude']]
             )->location;
 
-            Offer::create([
-                'user_id' => $user->id,
-                'category_id' => $category->id,
-                'title' => $data['title'],
-                'description' => $data['description'],
-                'type' => $data['type'],
-                'price' => $data['price'],
-                'is_negotiable' => $data['is_negotiable'],
-                'status' => $data['status'],
-                'location' => $location,
-            ]);
+            Offer::updateOrCreate(
+                [
+                    'title' => $data['title'],
+                ],
+                [
+                    'user_id' => $user->id,
+                    'category_id' => $category->id,
+                    'title' => $data['title'],
+                    'description' => $data['description'],
+                    'type' => $data['type'],
+                    'price' => $data['price'],
+                    'is_negotiable' => $data['is_negotiable'],
+                    'status' => $data['status'],
+                    'location' => $location,
+                ]
+            );
         }
     }
 }

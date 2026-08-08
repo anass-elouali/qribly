@@ -11,34 +11,21 @@ class UserSeeder extends Seeder
     public function run(): void
     {
         $users = [
-            [
-                'name' => 'Youssef Amrani',
-                'email' => 'youssef@qribly.test',
-            ],
-            [
-                'name' => 'Sara Benali',
-                'email' => 'sara@qribly.test',
-            ],
-            [
-                'name' => 'Omar Alaoui',
-                'email' => 'omar@qribly.test',
-            ],
-            [
-                'name' => 'Salma Idrissi',
-                'email' => 'salma@qribly.test',
-            ],
-            [
-                'name' => 'Test User',
-                'email' => 'test@qribly.test',
-            ],
+            ['name' => 'Youssef Amrani', 'email' => 'youssef@qribly.test'],
+            ['name' => 'Sara Benali', 'email' => 'sara@qribly.test'],
+            ['name' => 'Omar Alaoui', 'email' => 'omar@qribly.test'],
+            ['name' => 'Salma Idrissi', 'email' => 'salma@qribly.test'],
+            ['name' => 'Test User', 'email' => 'test@qribly.test'],
         ];
 
-        // All seeded users will use Password: password
         foreach ($users as $user) {
-            User::create([
-                ...$user,
-                'password' => Hash::make('password'),
-            ]);
+            User::updateOrCreate(
+                ['email' => $user['email']],
+                [
+                    'name' => $user['name'],
+                    'password' => Hash::make('password'),
+                ]
+            );
         }
     }
 }

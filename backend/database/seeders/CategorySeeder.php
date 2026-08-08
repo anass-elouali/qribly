@@ -20,9 +20,9 @@ class CategorySeeder extends Seeder
             'Groceries',
         ];
 
-        foreach ($categories as $category) {
-            Category::create([
-                'name' => $category,
+        foreach ($categories as $name) {
+            Category::firstOrCreate([
+                'name' => $name,
             ]);
         }
     }
