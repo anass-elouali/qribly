@@ -8,7 +8,7 @@ use App\Http\Requests\UpdateOfferRequest;
 use App\Http\Resources\OfferResource;
 use App\Models\Offer;
 use Illuminate\Support\Facades\DB;
-
+use App\Http\Requests\NearbyOfferRequest;
 
 class OfferController extends Controller
 {
@@ -123,6 +123,26 @@ class OfferController extends Controller
          return response()->json([
             'message' => 'Offer deleted successfully'
         ]);
+    }
+
+    public function nearby(NearbyOfferRequest $request)
+    {
+        $latitude = $request->validated('latitude');
+        $longitude = $request->validated('longitude');
+        $radius = $request->validated('radius') * 1000;
+
+        $point = "ST_SetSRID(ST_MakePoint(?, ?), 4326)::geography";
+
+        $offers = Offer::withLocationCoordinates()
+            ->with(['category', 'user'])
+            ->whereRaw(
+                "ST_DWithin(location, $point, ?)",
+                [$longitude, $latitude, $radius]
+            )
+            ->latest()
+            ->paginate(10);
+
+        return OfferResource::collection($offers);
     }
 
    

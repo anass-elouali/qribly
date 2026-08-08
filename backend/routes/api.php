@@ -12,7 +12,9 @@ Route::post('register', [AuthController::class, 'register']);
 Route::post('login', [AuthController::class, 'login']);
 
 Route::get('offers', [OfferController::class, 'index']);
+Route::get('offers/nearby', [OfferController::class, 'nearby']);
 Route::get('offers/{offer}', [OfferController::class, 'show']);
+
 
 // Protected routes
 Route::middleware('auth:sanctum')->group(function () {
