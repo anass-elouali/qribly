@@ -19,7 +19,10 @@ class OfferResource extends JsonResource
             'id' => $this->id,
             'title' => $this->title,
             'description' => $this->description,
+            'type' => $this->type,
             'price' => $this->price,
+            'is_negotiable' => $this->is_negotiable,
+            'status' => $this->status,
 
             'location' => $this->location ? [
                 'latitude' => $this->latitude,

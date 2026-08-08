@@ -32,6 +32,23 @@ class OfferController extends Controller
             });
         });
 
+        $query->when($request->type, function ($query) use ($request) {
+            $query->where('type', $request->type);
+        });
+
+        $query->when($request->status, function ($query) use ($request) {
+            $query->where('status', $request->status);
+        });
+
+        $query->when($request->min_price, function ($query) use ($request) {
+            $query->where('price', '>=', $request->min_price);
+        });
+
+        $query->when($request->max_price, function ($query) use ($request) {
+            $query->where('price', '<=', $request->max_price);
+        });
+
+
         $offers = $query->latest()->paginate(10);
         
 
