@@ -15,11 +15,17 @@ class OfferController extends Controller
     /**
      * Display a listing of the resource.
      */
-    public function index()
+    public function index(Request $request)
     {
-        $offers = Offer::with(['category', 'user'])
-            ->latest()
-            ->paginate(10);
+        $query = Offer::with(['category', 'user']);
+
+        $query->when($request->category, function($query) use ($request){
+            $query->where('category_id', $request->category);
+        });
+
+        $offers = $query->latest()->paginate(10);
+        
+
         return OfferResource::collection($offers);
     }
 

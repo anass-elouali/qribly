@@ -41,4 +41,10 @@ const router = createRouter({
   ],
 })
 
+router.beforeEach((to, from)=>{
+  console.log('Navigation...')
+  console.log('From:', from.fullPath)
+  console.log('To:', to.fullPath)
+})
+
 export default router
