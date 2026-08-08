@@ -2,51 +2,56 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
+
 use App\Http\Requests\StoreOfferRequest;
 use App\Http\Requests\UpdateOfferRequest;
 use App\Http\Resources\OfferResource;
 use App\Models\Offer;
 use Illuminate\Support\Facades\DB;
 use App\Http\Requests\NearbyOfferRequest;
+use App\Http\Requests\OfferIndexRequest;
 
 class OfferController extends Controller
 {
     /**
      * Display a listing of the resource.
      */
-    public function index(Request $request)
+    public function index(OfferIndexRequest $request)
     {
+        $filters = $request->validated();
+
         $query = Offer::withLocationCoordinates()
             ->with(['category', 'user']);
 
-        $query->when($request->category, function($query) use ($request){
-            $query->where('category_id', $request->category);
-            
+        
+        $query->when($filters['category'] ?? null, function ($query, $category) {
+            $query->where('category_id', $category);
         });
 
-        $query->when($request->q, function ($query) use ($request) {
-            $query->where(function ($query) use ($request) {
-                $query->where('title', 'ilike', '%' . $request->q . '%')
-                        ->orWhere('description', 'ilike', '%' . $request->q . '%');
+        $query->when($filters['q'] ?? null, function ($query, $q) {
+            $query->where(function ($query) use ($q) {
+                $query->where('title', 'ilike', "%{$q}%")
+                    ->orWhere('description', 'ilike', "%{$q}%");
             });
         });
 
-        $query->when($request->type, function ($query) use ($request) {
-            $query->where('type', $request->type);
+        $query->when($filters['type'] ?? null, function ($query, $type) {
+            $query->where('type', $type);
         });
 
-        $query->when($request->status, function ($query) use ($request) {
-            $query->where('status', $request->status);
+        $query->when($filters['status'] ?? null, function ($query, $status) {
+            $query->where('status', $status);
         });
 
-        $query->when($request->min_price, function ($query) use ($request) {
-            $query->where('price', '>=', $request->min_price);
+
+        $query->when($filters['min_price'] ?? null, function ($query, $minPrice) {
+            $query->where('price', '>=', $minPrice);
         });
 
-        $query->when($request->max_price, function ($query) use ($request) {
-            $query->where('price', '<=', $request->max_price);
+        $query->when($filters['max_price'] ?? null, function ($query, $maxPrice) {
+            $query->where('price', '<=', $maxPrice);
         });
+
 
 
         $offers = $query->latest()->paginate(10);
