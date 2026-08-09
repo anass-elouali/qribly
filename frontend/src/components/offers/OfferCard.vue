@@ -1,7 +1,9 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
 import type { Category } from '@/types/offer'
 import { statusLabel, statusColor, formatPrice } from '@/utils/offer'
+import { resolveStorageUrl } from '@/utils/url'
 
 const props = defineProps<{
   id: number
@@ -11,7 +13,13 @@ const props = defineProps<{
   isNegotiable?: boolean
   category?: Category | null
   distance?: number | null
+  images?: { id: number; url: string }[]
 }>()
+
+const thumbnailUrl = computed(() => {
+  const first = props.images?.[0]
+  return first ? resolveStorageUrl(first.url) : null
+})
 
 function formatDistance(meters: number) {
   return meters < 1000 ? `${Math.round(meters)} m` : `${(meters / 1000).toFixed(1)} km`
@@ -23,10 +31,14 @@ function formatDistance(meters: number) {
     :to="{ name: 'offer-details', params: { id: props.id } }"
     class="group flex flex-col overflow-hidden rounded-md border border-ink/10 bg-surface transition-shadow hover:shadow-lg"
   >
-    <div
-      class="flex aspect-[4/3] items-center justify-center bg-primary font-mono text-xs uppercase tracking-wide text-surface/70"
-    >
-      Photo
+    <div class="aspect-[4/3] overflow-hidden bg-primary">
+      <img v-if="thumbnailUrl" :src="thumbnailUrl" :alt="title" class="h-full w-full object-cover" />
+      <div
+        v-else
+        class="flex h-full items-center justify-center font-mono text-xs uppercase tracking-wide text-surface/70"
+      >
+        Photo
+      </div>
     </div>
 
     <div

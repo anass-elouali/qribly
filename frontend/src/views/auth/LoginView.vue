@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { RouterLink, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { extractErrorMessage } from '@/utils/errors'
 
 const authStore = useAuthStore()
 const router = useRouter()
@@ -22,8 +23,7 @@ async function handleLogin() {
       name: 'home',
     })
   } catch (err) {
-    console.error(err)
-    error.value = 'Invalid email or password.'
+    error.value = extractErrorMessage(err, 'Email ou mot de passe incorrect.')
   } finally {
     loading.value = false
   }
@@ -31,22 +31,15 @@ async function handleLogin() {
 </script>
 
 <template>
-  <main class="min-h-screen flex items-center justify-center bg-slate-100 px-4">
-    <div class="w-full max-w-md rounded-2xl bg-white p-8 shadow-lg">
-      <h1 class="mb-2 text-3xl font-bold text-slate-900">
-        Welcome back
-      </h1>
+  <main class="flex min-h-[calc(100vh-8rem)] items-center justify-center bg-ground px-4 py-12">
+    <div class="w-full max-w-md rounded-2xl border border-ink/10 bg-surface p-8 shadow-lg">
+      <h1 class="mb-2 font-display text-3xl font-bold text-ink">Content de te revoir</h1>
 
-      <p class="mb-6 text-slate-500">
-        Sign in to your Qribly account.
-      </p>
+      <p class="mb-6 font-body text-ink/60">Connecte-toi à ton compte Qribly.</p>
 
-      <form @submit.prevent="handleLogin" class="space-y-5">
+      <form class="space-y-5" @submit.prevent="handleLogin">
         <div>
-          <label
-            for="email"
-            class="mb-2 block text-sm font-medium text-slate-700"
-          >
+          <label for="email" class="mb-2 block font-mono text-xs tracking-wide text-ink/60 uppercase">
             Email
           </label>
 
@@ -56,17 +49,14 @@ async function handleLogin() {
             type="email"
             autocomplete="email"
             required
-            placeholder="you@example.com"
-            class="w-full rounded-lg border border-slate-300 px-4 py-3 outline-none transition focus:border-green-500 focus:ring-2 focus:ring-green-200"
+            placeholder="toi@example.com"
+            class="w-full rounded-lg border border-ink/15 bg-ground px-4 py-3 font-body outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
           />
         </div>
 
         <div>
-          <label
-            for="password"
-            class="mb-2 block text-sm font-medium text-slate-700"
-          >
-            Password
+          <label for="password" class="mb-2 block font-mono text-xs tracking-wide text-ink/60 uppercase">
+            Mot de passe
           </label>
 
           <input
@@ -76,24 +66,28 @@ async function handleLogin() {
             autocomplete="current-password"
             required
             placeholder="••••••••"
-            class="w-full rounded-lg border border-slate-300 px-4 py-3 outline-none transition focus:border-green-500 focus:ring-2 focus:ring-green-200"
+            class="w-full rounded-lg border border-ink/15 bg-ground px-4 py-3 font-body outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
           />
         </div>
 
-        <p
-          v-if="error"
-          class="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-600"
-        >
+        <p v-if="error" class="rounded-lg bg-status-reserved/10 px-4 py-3 text-sm text-status-reserved">
           {{ error }}
         </p>
 
         <button
           type="submit"
           :disabled="loading"
-          class="w-full rounded-lg bg-green-600 px-4 py-3 font-semibold text-white transition hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-60"
+          class="w-full rounded-lg bg-primary px-4 py-3 font-semibold text-surface transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {{ loading ? 'Logging in...' : 'Login' }}
+          {{ loading ? 'Connexion…' : 'Se connecter' }}
         </button>
+
+        <p class="text-center text-sm text-ink/60">
+          Pas de compte ?
+          <RouterLink :to="{ name: 'register' }" class="font-semibold text-primary hover:underline">
+            S'inscrire
+          </RouterLink>
+        </p>
       </form>
     </div>
   </main>

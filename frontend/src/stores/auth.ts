@@ -43,6 +43,23 @@ export const useAuthStore = defineStore('auth', () => {
     )
   }
 
+  async function register(name: string, email: string, password: string, passwordConfirmation: string) {
+    const response = await api.post<LoginResponse>('/register', {
+      name,
+      email,
+      password,
+      password_confirmation: passwordConfirmation,
+    })
+
+    user.value = response.data.user
+    token.value = response.data.token
+
+    localStorage.setItem(
+      'qribly_token',
+      response.data.token
+    )
+  }
+
   async function restoreAuthentication() {
     if (!token.value) {
       return
@@ -78,6 +95,7 @@ export const useAuthStore = defineStore('auth', () => {
     token,
     isAuthenticated,
     login,
+    register,
     restoreAuthentication,
     logout,
   }

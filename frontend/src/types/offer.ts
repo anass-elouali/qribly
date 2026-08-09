@@ -14,6 +14,7 @@ export interface Offer {
   location: { latitude: number; longitude: number } | null
   category?: Category
   owner?: { id: number; name: string }
+  images?: { id: number; url: string }[]
   distance: number | null
   created_at: string
   updated_at: string

@@ -6,6 +6,7 @@ import { useAuthStore } from '@/stores/auth'
 const LoginView = () => import('@/views/auth/LoginView.vue')
 const RegisterView = () => import('@/views/auth/RegisterView.vue')
 const OfferDetailsView = () => import('@/views/offers/OfferDetailsView.vue')
+const OfferFormView = () => import('@/views/offers/OfferFormView.vue')
 const ProfileView = () => import('@/views/profile/ProfileView.vue')
 
 const router = createRouter({
@@ -20,6 +21,22 @@ const router = createRouter({
           path:'',
           name:'home',
           component:HomeView,
+        },
+        {
+          path: 'offers/nouvelle',
+          name: 'offer-create',
+          component: OfferFormView,
+          meta: {
+            requiresAuth: true,
+          },
+        },
+        {
+          path: 'offers/:id/modifier',
+          name: 'offer-edit',
+          component: OfferFormView,
+          meta: {
+            requiresAuth: true,
+          },
         },
         {
           path: 'offers/:id',

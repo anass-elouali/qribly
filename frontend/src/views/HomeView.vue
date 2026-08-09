@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref, watch } from 'vue'
 import api from '@/services/api'
+import { fetchCategories } from '@/services/categories'
 import OfferCard from '@/components/offers/OfferCard.vue'
 import QriblyLogo from '@/components/branding/QriblyLogo.vue'
 import type { Category, Offer, PaginatedResponse } from '@/types/offer'
@@ -12,15 +13,6 @@ const page = ref(1)
 const lastPage = ref(1)
 const loading = ref(false)
 const error = ref('')
-
-async function loadCategories() {
-  try {
-    const response = await api.get<{ data: Category[] }>('/categories')
-    categories.value = response.data.data
-  } catch {
-    categories.value = []
-  }
-}
 
 async function loadOffers() {
   loading.value = true
@@ -50,8 +42,8 @@ function selectCategory(id: number | null) {
 
 watch([selectedCategory, page], loadOffers)
 
-onMounted(() => {
-  loadCategories()
+onMounted(async () => {
+  categories.value = await fetchCategories()
   loadOffers()
 })
 </script>
@@ -113,6 +105,7 @@ onMounted(() => {
         :status="offer.status"
         :is-negotiable="offer.is_negotiable"
         :category="offer.category ?? null"
+        :images="offer.images"
       />
     </div>
 

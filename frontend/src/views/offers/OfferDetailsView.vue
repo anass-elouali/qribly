@@ -1,15 +1,17 @@
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import dayjs from 'dayjs'
 import api from '@/services/api'
 import type { Offer } from '@/types/offer'
 import { statusLabel, statusColor, formatPrice } from '@/utils/offer'
+import { resolveStorageUrl } from '@/utils/url'
 
 const route = useRoute()
 const offer = ref<Offer | null>(null)
 const loading = ref(true)
 const error = ref('')
+const selectedImageIndex = ref(0)
 
 function initials(name: string) {
   return name
@@ -23,6 +25,7 @@ function initials(name: string) {
 async function loadOffer() {
   loading.value = true
   error.value = ''
+  selectedImageIndex.value = 0
 
   try {
     const response = await api.get<{ data: Offer }>(`/offers/${route.params.id}`)
@@ -33,6 +36,11 @@ async function loadOffer() {
     loading.value = false
   }
 }
+
+const selectedImageUrl = computed(() => {
+  const image = offer.value?.images?.[selectedImageIndex.value]
+  return image ? resolveStorageUrl(image.url) : null
+})
 
 onMounted(loadOffer)
 watch(() => route.params.id, loadOffer)
@@ -47,10 +55,29 @@ watch(() => route.params.id, loadOffer)
     </p>
 
     <div v-else-if="offer" class="grid gap-8 md:grid-cols-2">
-      <div
-        class="flex aspect-[4/3] items-center justify-center rounded-md bg-primary font-mono text-xs tracking-wide text-surface/70 uppercase"
-      >
-        Photo
+      <div class="flex flex-col gap-3">
+        <div class="aspect-[4/3] overflow-hidden rounded-md bg-primary">
+          <img v-if="selectedImageUrl" :src="selectedImageUrl" :alt="offer.title" class="h-full w-full object-cover" />
+          <div
+            v-else
+            class="flex h-full items-center justify-center font-mono text-xs tracking-wide text-surface/70 uppercase"
+          >
+            Photo
+          </div>
+        </div>
+
+        <div v-if="offer.images && offer.images.length > 1" class="flex gap-2">
+          <button
+            v-for="(image, index) in offer.images"
+            :key="image.id"
+            type="button"
+            class="h-14 w-14 overflow-hidden rounded border-2 transition"
+            :class="index === selectedImageIndex ? 'border-primary' : 'border-transparent'"
+            @click="selectedImageIndex = index"
+          >
+            <img :src="resolveStorageUrl(image.url)" :alt="`Photo ${index + 1}`" class="h-full w-full object-cover" />
+          </button>
+        </div>
       </div>
 
       <div class="flex flex-col gap-4">

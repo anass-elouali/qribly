@@ -33,6 +33,13 @@ async function handleLogout() {
 
         <template v-if="authStore.isAuthenticated">
           <RouterLink
+            :to="{ name: 'offer-create' }"
+            class="rounded-md bg-accent px-3.5 py-1.5 font-semibold text-ink transition-opacity hover:opacity-90"
+          >
+            Publier une annonce
+          </RouterLink>
+
+          <RouterLink
             :to="{ name: 'profile' }"
             class="text-ink/70 transition-colors hover:text-primary"
             active-class="font-semibold text-primary"
