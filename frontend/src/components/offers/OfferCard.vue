@@ -1,10 +1,6 @@
 <script setup lang="ts">
 import { RouterLink } from 'vue-router'
-
-interface Category {
-  id: number
-  name: string
-}
+import type { Category } from '@/types/offer'
 
 const props = defineProps<{
   id: number
