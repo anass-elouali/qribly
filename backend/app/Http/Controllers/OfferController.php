@@ -21,7 +21,7 @@ class OfferController extends Controller
         $filters = $request->validated();
 
         $query = Offer::withLocationCoordinates()
-            ->with(['category', 'user']);
+            ->with(['category', 'user', 'offerImages']);
 
         
         $query->when($filters['category'] ?? null, function ($query, $category) {
@@ -120,7 +120,7 @@ class OfferController extends Controller
     public function show(Offer $offer)
     {
         $offer = Offer::withLocationCoordinates()
-            ->with(['category', 'user'])
+            ->with(['category', 'user', 'offerImages'])
             ->findOrFail($offer->id);
 
 
@@ -153,7 +153,7 @@ class OfferController extends Controller
         $offer->update($data);
 
         $offer = Offer::withLocationCoordinates()
-            ->with(['category', 'user'])
+            ->with(['category', 'user', 'offerImages'])
             ->findOrFail($offer->id);
 
 
@@ -181,7 +181,7 @@ class OfferController extends Controller
         $point = 'ST_SetSRID(ST_MakePoint(?, ?), 4326)::geography';
 
         $offers = Offer::withLocationCoordinates()
-            ->with(['category', 'user'])
+            ->with(['category', 'user', 'offerImages'])
             ->selectRaw(
                 "ST_Distance(location, $point) AS distance",
                 [$longitude, $latitude]
