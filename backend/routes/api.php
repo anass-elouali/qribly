@@ -25,6 +25,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('offers/{offer}', [OfferController::class, 'destroy']);
 
     Route::delete('offers/{offer}/images/{image}',[OfferImageController::class, 'destroy']);
+    Route::post('offers/{offer}/images',[OfferImageController::class, 'store']
+);
+
 
     Route::get('user', [AuthController::class, 'user']);
 

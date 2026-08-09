@@ -10,6 +10,7 @@ use App\Models\Offer;
 use Illuminate\Support\Facades\DB;
 use App\Http\Requests\NearbyOfferRequest;
 use App\Http\Requests\OfferIndexRequest;
+use Illuminate\Support\Facades\Storage;
 
 class OfferController extends Controller
 {
@@ -153,7 +154,7 @@ class OfferController extends Controller
         $offer->update($data);
 
         $offer = Offer::withLocationCoordinates()
-            ->with(['category', 'user'])
+            ->with(['category', 'user', 'offerImages'])
             ->findOrFail($offer->id);
 
 
@@ -166,6 +167,13 @@ class OfferController extends Controller
     public function destroy(Offer $offer)
     {
         $this->authorize('delete', $offer);
+
+        $offer->load('offerImages');
+
+        foreach ($offer->offerImages as $image) {
+            Storage::disk('public')->delete($image->path);
+        }
+
         $offer->delete();
          return response()->json([
             'message' => 'Offer deleted successfully'
