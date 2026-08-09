@@ -3,10 +3,10 @@ import HomeView from '@/views/HomeView.vue'
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 
-const LoginView = () => import('@/views/LoginView.vue')
-const RegisterView = () => import('@/views/RegisterView.vue')
-const OfferDetailsView = () => import('@/views/OfferDetailsView.vue')
-const ProfileView = () => import('@/views/ProfileView.vue')
+const LoginView = () => import('@/views/auth/LoginView.vue')
+const RegisterView = () => import('@/views/auth/RegisterView.vue')
+const OfferDetailsView = () => import('@/views/offers/OfferDetailsView.vue')
+const ProfileView = () => import('@/views/profile/ProfileView.vue')
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),

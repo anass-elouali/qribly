@@ -1,5 +1,18 @@
 <script setup lang="ts">
-    import { RouterLink } from 'vue-router';
+    import { RouterLink, useRouter } from 'vue-router';
+    import { useAuthStore } from '@/stores/auth';
+    import QriblyLogo from '@/components/branding/QriblyLogo.vue';
+
+    const authStore = useAuthStore()
+    const router = useRouter()
+
+    async function handelLogout() {
+        await authStore.logout()
+
+        await router.push({
+            name: 'home',
+        })
+    }
 </script>
 
 <template>
@@ -7,18 +20,18 @@
         <nav class="mx-auto flex h-16 max-w-7xl items-center justify-between px-6">
             <RouterLink
                 :to="{ name: 'home' }"
-                class="text-2xl font-bold text-blue-600"
+                class="flex items-center text-xl font-bold group"
+                aria-label="QRIBLY home"
             >
-                Qribly
+                <QriblyLogo />
+                
+
             </RouterLink>
 
-            <div class="flex items-center gap-6">
-                <RouterLink
-                :to="{ name: 'home' }"
-                class="text-gray-700 hover:text-blue-600"
-                >
-                    Home
-                </RouterLink>
+        
+
+            <div v-if="!authStore.isAuthenticated" class="flex items-center gap-6">
+               
 
                 <RouterLink
                     :to="{ name: 'login' }"
@@ -33,7 +46,22 @@
                 >
                     Register
                 </RouterLink>
+
+             
             </div>
+
+            <div  v-if="authStore.isAuthenticated" class="">
+                <button 
+                    class="cursor-pointer"
+                    @click="handelLogout"
+                >
+                    Logout
+                </button>
+
+            </div>
+
+            
+
         </nav>
     </header>
 </template>
