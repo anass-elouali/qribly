@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Offer extends Model
 {
@@ -34,5 +35,10 @@ class Offer extends Model
             ->select('offers.*')
             ->selectRaw('ST_Y(location::geometry) AS latitude')
             ->selectRaw('ST_X(location::geometry) AS longitude');
+    }
+
+    public function offerImages(): HasMany
+    {
+        return $this->hasMany(OfferImage::class);
     }
 }

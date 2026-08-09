@@ -41,6 +41,18 @@ class StoreOfferRequest extends FormRequest
             'location' => ['required', 'array'],
             'location.latitude' => ['required', 'numeric', 'between:-90,90'],
             'location.longitude' => ['required', 'numeric', 'between:-180,180'],
+
+            'images' => [
+                'nullable',
+                'array',
+                'max:5',
+            ],
+            
+            'images.*' => [
+                'image',
+                'mimes:jpg,jpeg,png,webp,avif',
+                // 'max:5120',
+            ],
         ];
     }
 }
