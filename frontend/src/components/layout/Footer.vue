@@ -1,7 +1,7 @@
 <template>
-  <footer class="border-t bg-white">
-    <div class="mx-auto max-w-7xl px-6 py-4 text-center text-gray-500">
-      © 2026 Qribly
+  <footer class="border-t border-ink/10 bg-primary">
+    <div class="mx-auto max-w-7xl px-6 py-4 text-center font-body text-sm text-surface/80">
+      © 2026 Qribly — le marché de quartier
     </div>
   </footer>
 </template>

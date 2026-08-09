@@ -5,7 +5,7 @@
 </script>
 
 <template>
-    <div class="min-h-screen flex flex-col bg-slate-100">
+    <div class="min-h-screen flex flex-col bg-ground font-body text-ink">
         <Navbar />
         <main class="flex-1">
             <RouterView />

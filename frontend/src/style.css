@@ -1,1 +1,21 @@
 @import "tailwindcss";
+
+@theme {
+  --color-ground: #EFF2EC;
+  --color-surface: #FBFBF6;
+  --color-ink: #1E2321;
+  --color-primary: #14495A;
+  --color-accent: #F2A93C;
+  --color-status-active: #3F7D52;
+  --color-status-reserved: #B9812F;
+  --color-status-sold: #8B8A7D;
+
+  --font-display: 'Century Gothic', 'Futura', 'Trebuchet MS', 'Segoe UI', sans-serif;
+  --font-body: 'Palatino Linotype', Palatino, 'Iowan Old Style', Georgia, 'Times New Roman', serif;
+  --font-mono: Consolas, 'SFMono-Regular', 'Cascadia Mono', 'Courier New', monospace;
+}
+
+body {
+  background-color: var(--color-ground);
+  color: var(--color-ink);
+}

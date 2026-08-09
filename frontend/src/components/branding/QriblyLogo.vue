@@ -1,9 +1,9 @@
-<script setup>
-import { motion } from 'motion-v';
+<script setup lang="ts">
+import { motion } from 'motion-v'
 </script>
 
 <template>
-  <div class="flex items-center text-xl font-bold">
+  <div class="flex items-center font-display text-xl font-bold text-primary">
     <!-- QRIB: the magnet, gets a tiny recoil when LY lands -->
     <motion.span
       class="inline-block"
