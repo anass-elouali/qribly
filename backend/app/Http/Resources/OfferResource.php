@@ -4,7 +4,7 @@ namespace App\Http\Resources;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 class OfferResource extends JsonResource
 {
@@ -36,6 +36,16 @@ class OfferResource extends JsonResource
             'owner' => UserResource::make(
                 $this->whenLoaded('user')
             ),
+
+
+            'images' => $this->whenLoaded('offerImages', function () {
+                return $this->offerImages->map(function ($image) {
+                    return [
+                        'id' => $image->id,
+                        'url' => Storage::url($image->path),
+                    ];
+                });
+            }),
 
             'distance' => isset($this->distance)
                 ? round($this->distance, 2)

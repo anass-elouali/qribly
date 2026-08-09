@@ -67,11 +67,13 @@ class OfferController extends Controller
     {
         $data = $request->validated();
 
+        // Extract location
         $latitude = $data['location']['latitude'];
         $longitude = $data['location']['longitude'];
 
         unset($data['location']);
 
+        // Convert coordinates to PostGIS geography
         $location = DB::selectOne(
             'SELECT ST_SetSRID(ST_MakePoint(?, ?), 4326)::geography AS location',
             [$longitude, $latitude]
@@ -79,9 +81,32 @@ class OfferController extends Controller
 
         $data['location'] = $location;
 
+        // Remove images from offer data
+        $images = $data['images'] ?? [];
+        unset($data['images']);
+
+        // Create offer
         $offer = $request->user()->offers()->create($data);
 
-        $offer->load(['category', 'user']);
+
+        // Store images
+        foreach ($images as $image) {
+            $path = $image->store('offers', 'public');
+
+            $offer->offerImages()->create([
+                'path' => $path,
+            ]);
+        }
+
+
+         // Load relationships
+        $offer->load([
+            'category',
+            'user',
+            'offerImages',
+        ]);
+
+    
 
         return (new OfferResource($offer))
             ->response()
