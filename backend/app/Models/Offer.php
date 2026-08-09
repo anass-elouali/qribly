@@ -41,4 +41,10 @@ class Offer extends Model
     {
         return $this->hasMany(OfferImage::class);
     }
+
+    public function favoritedBy()
+    {
+        return $this->belongsToMany(User::class, 'favorites')
+            ->withTimestamps();
+    }
 }
