@@ -21,7 +21,7 @@ class OfferController extends Controller
         $filters = $request->validated();
 
         $query = Offer::withLocationCoordinates()
-            ->with(['category', 'user']);
+            ->with(['category', 'user','offerImages']);
 
         
         $query->when($filters['category'] ?? null, function ($query, $category) {
@@ -54,7 +54,7 @@ class OfferController extends Controller
 
 
 
-        $offers = $query->latest()->paginate(10);
+        $offers = $query->latest()->paginate(15);
         
 
         return OfferResource::collection($offers);
@@ -120,7 +120,7 @@ class OfferController extends Controller
     public function show(Offer $offer)
     {
         $offer = Offer::withLocationCoordinates()
-            ->with(['category', 'user'])
+            ->with(['category', 'user','offerImages'])
             ->findOrFail($offer->id);
 
 
