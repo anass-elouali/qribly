@@ -1,0 +1,17 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors
+.vscode/
+.idea/
+
+# AI tools
+.claude/
+.codex/
+.cursor/
+.aider*
+
+# Env
+.env
+.env.*.local
