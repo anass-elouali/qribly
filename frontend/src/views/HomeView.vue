@@ -2,6 +2,7 @@
 import { onMounted, ref, watch } from 'vue'
 import api from '@/services/api'
 import OfferCard from '@/components/offers/OfferCard.vue'
+import QriblyLogo from '@/components/branding/QriblyLogo.vue'
 import type { Category, Offer, PaginatedResponse } from '@/types/offer'
 
 const offers = ref<Offer[]>([])
@@ -13,8 +14,12 @@ const loading = ref(false)
 const error = ref('')
 
 async function loadCategories() {
-  const response = await api.get<{ data: Category[] }>('/categories')
-  categories.value = response.data.data
+  try {
+    const response = await api.get<{ data: Category[] }>('/categories')
+    categories.value = response.data.data
+  } catch {
+    categories.value = []
+  }
 }
 
 async function loadOffers() {
@@ -53,6 +58,10 @@ onMounted(() => {
 
 <template>
   <div class="mx-auto max-w-6xl px-6 py-8">
+    <div class="flex justify-center py-8">
+      <QriblyLogo class="w-full max-w-sm" :animated="true" :show-tagline="true" />
+    </div>
+
     <h1 class="mb-6 font-display text-2xl font-bold text-primary">Annonces</h1>
 
     <div class="mb-6 flex flex-wrap gap-2">

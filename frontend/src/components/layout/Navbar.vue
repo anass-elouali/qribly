@@ -19,7 +19,7 @@ async function handleLogout() {
   <header class="border-b border-ink/10 bg-surface">
     <nav class="mx-auto flex h-16 max-w-7xl items-center justify-between px-6">
       <RouterLink :to="{ name: 'home' }" class="flex items-center" aria-label="Qribly, accueil">
-        <QriblyLogo />
+        <QriblyLogo class="w-32" :animated="false" :show-tagline="false" />
       </RouterLink>
 
       <div class="flex items-center gap-6 font-body text-sm">

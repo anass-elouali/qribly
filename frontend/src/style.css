@@ -10,8 +10,8 @@
   --color-status-reserved: #B9812F;
   --color-status-sold: #8B8A7D;
 
-  --font-display: 'Century Gothic', 'Futura', 'Trebuchet MS', 'Segoe UI', sans-serif;
-  --font-body: 'Palatino Linotype', Palatino, 'Iowan Old Style', Georgia, 'Times New Roman', serif;
+  --font-display: 'Fraunces', Georgia, 'Times New Roman', serif;
+  --font-body: 'Archivo', 'Segoe UI', Helvetica, Arial, sans-serif;
   --font-mono: Consolas, 'SFMono-Regular', 'Cascadia Mono', 'Courier New', monospace;
 }
 
