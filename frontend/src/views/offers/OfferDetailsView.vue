@@ -2,32 +2,14 @@
 import { onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import dayjs from 'dayjs'
-import relativeTime from 'dayjs/plugin/relativeTime'
-import 'dayjs/locale/fr'
 import api from '@/services/api'
 import type { Offer } from '@/types/offer'
-
-dayjs.extend(relativeTime)
-dayjs.locale('fr')
+import { statusLabel, statusColor, formatPrice } from '@/utils/offer'
 
 const route = useRoute()
 const offer = ref<Offer | null>(null)
 const loading = ref(true)
 const error = ref('')
-
-const statusLabel: Record<string, string> = {
-  active: 'Actif',
-  reserved: 'Réservé',
-  sold: 'Vendu',
-  inactive: 'Inactif',
-}
-
-const statusColor: Record<string, string> = {
-  active: 'bg-status-active',
-  reserved: 'bg-status-reserved',
-  sold: 'bg-status-sold',
-  inactive: 'bg-ink/40',
-}
 
 function initials(name: string) {
   return name
@@ -36,10 +18,6 @@ function initials(name: string) {
     .join('')
     .slice(0, 2)
     .toUpperCase()
-}
-
-function formatPrice(value: string) {
-  return new Intl.NumberFormat('fr-MA').format(Number(value))
 }
 
 async function loadOffer() {

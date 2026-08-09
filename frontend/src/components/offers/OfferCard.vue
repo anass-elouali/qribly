@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { RouterLink } from 'vue-router'
 import type { Category } from '@/types/offer'
+import { statusLabel, statusColor, formatPrice } from '@/utils/offer'
 
 const props = defineProps<{
   id: number
@@ -11,24 +12,6 @@ const props = defineProps<{
   category?: Category | null
   distance?: number | null
 }>()
-
-const statusLabel: Record<string, string> = {
-  active: 'Actif',
-  reserved: 'Réservé',
-  sold: 'Vendu',
-  inactive: 'Inactif',
-}
-
-const statusColor: Record<string, string> = {
-  active: 'bg-status-active',
-  reserved: 'bg-status-reserved',
-  sold: 'bg-status-sold',
-  inactive: 'bg-ink/40',
-}
-
-function formatPrice(value: string | number) {
-  return new Intl.NumberFormat('fr-MA').format(Number(value))
-}
 
 function formatDistance(meters: number) {
   return meters < 1000 ? `${Math.round(meters)} m` : `${(meters / 1000).toFixed(1)} km`
