@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\OfferController;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\FavoriteController;
 use App\Http\Controllers\OfferImageController;
 
 // Public routes
@@ -25,8 +26,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('offers/{offer}', [OfferController::class, 'destroy']);
 
     Route::delete('offers/{offer}/images/{image}',[OfferImageController::class, 'destroy']);
-    Route::post('offers/{offer}/images',[OfferImageController::class, 'store']
-);
+    Route::post('offers/{offer}/images',[OfferImageController::class, 'store']);
+
+    Route::post('offers/{offer}/favorite', [FavoriteController::class, 'store']);
+
+    Route::delete('offers/{offer}/favorite',[FavoriteController::class, 'destroy']);
 
 
     Route::get('user', [AuthController::class, 'user']);
