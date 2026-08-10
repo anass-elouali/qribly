@@ -6,6 +6,7 @@ use App\Http\Controllers\OfferController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\FavoriteController;
 use App\Http\Controllers\OfferImageController;
+use App\Http\Controllers\ReservationController;
 
 // Public routes
 Route::apiResource('categories', CategoryController::class);
@@ -31,7 +32,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('favorites',[FavoriteController::class, 'index']);
     Route::post('offers/{offer}/favorite', [FavoriteController::class, 'store']);
     Route::delete('offers/{offer}/favorite',[FavoriteController::class, 'destroy']);
-
+    Route::post('offers/{offer}/reservations',[ReservationController::class, 'store']);
 
 
     Route::get('user', [AuthController::class, 'user']);

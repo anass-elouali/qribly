@@ -11,6 +11,7 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use App\Models\Offer;
+use App\Models\Reservation;
 use Laravel\Sanctum\HasApiTokens;
 
 
@@ -43,5 +44,10 @@ class User extends Authenticatable
     {
         return $this->belongsToMany(Offer::class, 'favorites')
             ->withTimestamps();
+    }
+
+    public function reservations(): HasMany 
+    {
+        return $this->hasMany(Reservation::class);
     }
 }
