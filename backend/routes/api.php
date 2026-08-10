@@ -32,7 +32,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('favorites',[FavoriteController::class, 'index']);
     Route::post('offers/{offer}/favorite', [FavoriteController::class, 'store']);
     Route::delete('offers/{offer}/favorite',[FavoriteController::class, 'destroy']);
+
+    //Client Reservations EndPoints
+    Route::get('reservations',[ReservationController::class, 'index']);
     Route::post('offers/{offer}/reservations',[ReservationController::class, 'store']);
+    Route::patch('reservations/{reservation}/cancel',[ReservationController::class, 'cancel']);
 
 
     Route::get('user', [AuthController::class, 'user']);
