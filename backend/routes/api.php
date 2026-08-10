@@ -28,9 +28,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('offers/{offer}/images/{image}',[OfferImageController::class, 'destroy']);
     Route::post('offers/{offer}/images',[OfferImageController::class, 'store']);
 
+    Route::get('favorites',[FavoriteController::class, 'index']);
     Route::post('offers/{offer}/favorite', [FavoriteController::class, 'store']);
-
     Route::delete('offers/{offer}/favorite',[FavoriteController::class, 'destroy']);
+
 
 
     Route::get('user', [AuthController::class, 'user']);
