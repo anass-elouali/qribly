@@ -7,6 +7,7 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\FavoriteController;
 use App\Http\Controllers\OfferImageController;
 use App\Http\Controllers\ReservationController;
+use App\Http\Controllers\ReviewController;
 
 // Public routes
 Route::apiResource('categories', CategoryController::class);
@@ -18,6 +19,8 @@ Route::get('offers', [OfferController::class, 'index']);
 Route::get('offers/nearby', [OfferController::class, 'nearby']);
 Route::get('offers/{offer}', [OfferController::class, 'show']);
 
+// Public Review 
+Route::get('offers/{offer}/reviews',[ReviewController::class, 'index']);
 
 // Protected routes
 Route::middleware('auth:sanctum')->group(function () {
@@ -33,20 +36,25 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('offers/{offer}/favorite', [FavoriteController::class, 'store']);
     Route::delete('offers/{offer}/favorite',[FavoriteController::class, 'destroy']);
 
-    //Client Reservations EndPoints
+    //Client Reservations Endpoints
     Route::get('reservations',[ReservationController::class, 'index']);
     Route::post('offers/{offer}/reservations',[ReservationController::class, 'store']);
     Route::patch('reservations/{reservation}/cancel',[ReservationController::class, 'cancel']);
 
 
-    //Provider Reservations End Points
+    //Provider Reservations Endpoints
     Route::get('provider/reservations',[ReservationController::class, 'providerIndex']);
     Route::patch('provider/reservations/{reservation}/confirm',[ReservationController::class, 'providerConfirm']);
     Route::patch('provider/reservations/{reservation}/cancel',[ReservationController::class, 'providerCancel']);
     Route::patch('provider/reservations/{reservation}/complete',[ReservationController::class, 'providerComplete']);
 
+    //Reviews Endpoints
+    Route::post('reviews',[ReviewController::class, 'store']);
+    Route::patch('reviews/{review}',[ReviewController::class, 'update']);
+    Route::delete('reviews/{review}',[ReviewController::class, 'destroy']);
+    
+    
     Route::get('user', [AuthController::class, 'user']);
-
     Route::post('logout', [AuthController::class, 'logout']);
 });
 
