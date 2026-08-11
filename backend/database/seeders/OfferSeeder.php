@@ -143,6 +143,69 @@ class OfferSeeder extends Seeder
                 'latitude' => 31.6280,
                 'longitude' => -8.0250,
             ],
+            // Offres à distances croissantes du centre de Marrakech, pour tester
+            // le filtre de rayon de "Près de moi" (GET /offers/nearby) sur plusieurs
+            // paliers plutôt qu'un seul cluster serré à moins de 3 km.
+            [
+                'user' => 'salma@qribly.test',
+                'category' => 'Home Services',
+                'title' => 'Palmeraie Villa Cleaning Service',
+                'description' => 'Cleaning service for villas and holiday homes in the Palmeraie area.',
+                'type' => 'service',
+                'price' => 180,
+                'is_negotiable' => true,
+                'status' => 'active',
+                'latitude' => 31.7000, // ~8 km du centre
+                'longitude' => -8.0300,
+            ],
+            [
+                'user' => 'test@qribly.test',
+                'category' => 'Groceries',
+                'title' => 'Farm Fresh Vegetables Delivery',
+                'description' => 'Weekly delivery of fresh vegetables from farms north of Marrakech.',
+                'type' => 'product',
+                'price' => 60,
+                'is_negotiable' => false,
+                'status' => 'active',
+                'latitude' => 31.8000, // ~21 km du centre
+                'longitude' => -7.9000,
+            ],
+            [
+                'user' => 'omar@qribly.test',
+                'category' => 'Transportation',
+                'title' => 'Mountain Bike Rental',
+                'description' => 'Mountain bike rental for trails near the Ourika valley.',
+                'type' => 'service',
+                'price' => 80,
+                'is_negotiable' => true,
+                'status' => 'active',
+                'latitude' => 31.3500, // ~31 km du centre
+                'longitude' => -7.9500,
+            ],
+            [
+                'user' => 'sara@qribly.test',
+                'category' => 'Home Services',
+                'title' => 'Essaouira Beachfront Apartment Cleaning',
+                'description' => 'Cleaning service for beachfront apartments in Essaouira.',
+                'type' => 'service',
+                'price' => 150,
+                'is_negotiable' => false,
+                'status' => 'active',
+                'latitude' => 31.5085, // ~167 km du centre, hors de tous les rayons proposés
+                'longitude' => -9.7595,
+            ],
+            [
+                'user' => 'youssef@qribly.test',
+                'category' => 'Electronics',
+                'title' => 'Casablanca Electronics Repair Shop',
+                'description' => 'Repair service for smartphones, laptops and small appliances.',
+                'type' => 'service',
+                'price' => 90,
+                'is_negotiable' => true,
+                'status' => 'active',
+                'latitude' => 33.5731, // ~230 km du centre, hors de tous les rayons proposés
+                'longitude' => -7.5898,
+            ],
         ];
 
         foreach ($offers as $data) {
