@@ -4,6 +4,7 @@ import { RouterLink } from 'vue-router'
 import type { Category } from '@/types/offer'
 import { statusLabel, statusColor, formatPrice } from '@/utils/offer'
 import { resolveStorageUrl } from '@/utils/url'
+import FavoriteButton from '@/components/offers/FavoriteButton.vue'
 
 const props = defineProps<{
   id: number
@@ -27,7 +28,9 @@ function formatDistance(meters: number) {
 </script>
 
 <template>
-  <div class="flex flex-col overflow-hidden rounded-md border border-ink/10 bg-surface">
+  <div class="relative flex flex-col overflow-hidden rounded-md border border-ink/10 bg-surface">
+    <FavoriteButton :offer-id="props.id" class="absolute top-2 right-2 z-10" />
+
     <RouterLink
       :to="{ name: 'offer-details', params: { id: props.id } }"
       class="group flex flex-1 flex-col transition-shadow hover:shadow-lg"

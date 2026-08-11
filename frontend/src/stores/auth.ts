@@ -1,6 +1,7 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import api from '@/services/api'
+import { useFavoritesStore } from '@/stores/favorites'
 
 interface User {
   id: number
@@ -87,6 +88,7 @@ export const useAuthStore = defineStore('auth', () => {
       user.value = null
 
       localStorage.removeItem('qribly_token')
+      useFavoritesStore().reset()
     }
   }
 

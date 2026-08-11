@@ -8,6 +8,7 @@ import type { Offer } from '@/types/offer'
 import { statusLabel, statusColor, formatPrice } from '@/utils/offer'
 import { resolveStorageUrl } from '@/utils/url'
 import { extractErrorMessage } from '@/utils/errors'
+import FavoriteButton from '@/components/offers/FavoriteButton.vue'
 
 const route = useRoute()
 const authStore = useAuthStore()
@@ -124,7 +125,10 @@ watch(() => route.params.id, () => {
           {{ offer.category.name }}
         </p>
 
-        <h1 class="font-display text-2xl font-bold text-ink">{{ offer.title }}</h1>
+        <div class="flex items-start justify-between gap-3">
+          <h1 class="font-display text-2xl font-bold text-ink">{{ offer.title }}</h1>
+          <FavoriteButton :offer-id="offer.id" :size="20" class="shrink-0 border border-ink/10" />
+        </div>
 
         <div class="flex flex-wrap items-center gap-3">
           <span class="-rotate-2 rounded bg-accent px-3 py-1 font-mono text-lg font-bold text-ink">
