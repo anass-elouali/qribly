@@ -81,4 +81,95 @@ class ReservationController extends Controller
             ],
         ]);
     }
+
+    public function providerIndex(Request $request)
+    {
+        $reservations = Reservation::query()
+            ->whereHas('offer', function ($query) use ($request) {
+                $query->where('user_id', $request->user()->id)
+                    ->where('type', 'service');
+            })
+            ->with([
+                'offer',
+                'user',
+            ])
+            ->latest('scheduled_at')
+            ->paginate(15);
+
+        return ReservationResource::collection($reservations);
+    }
+
+    public function providerConfirm(
+        Request $request,
+        Reservation $reservation
+    ) {
+        $this->authorize('confirm', $reservation);
+
+        if ($reservation->status !== 'pending') {
+            return response()->json([
+                'message' => 'Only pending reservations can be confirmed.',
+            ], 422);
+        }
+
+        $reservation->update([
+            'status' => 'confirmed',
+        ]);
+
+        $reservation->load([
+            'offer',
+            'user',
+        ]);
+
+        return new ReservationResource($reservation);
+    }
+
+    public function providerCancel(
+        Request $request,
+        Reservation $reservation
+    ) {
+        $this->authorize('cancel', $reservation);
+
+        if (!in_array($reservation->status, ['pending', 'confirmed'])) {
+            return response()->json([
+                'message' => 'This reservation cannot be cancelled.',
+            ], 422);
+        }
+
+        $reservation->update([
+            'status' => 'cancelled',
+            'cancelled_at' => now(),
+            'cancelled_by' => $request->user()->id,
+        ]);
+
+        $reservation->load([
+            'offer',
+            'user',
+        ]);
+
+        return new ReservationResource($reservation);
+    }
+
+    public function providerComplete(
+    Request $request,
+    Reservation $reservation
+    ) {
+        $this->authorize('complete', $reservation);
+
+        if ($reservation->status !== 'confirmed') {
+            return response()->json([
+                'message' => 'Only confirmed reservations can be completed.',
+            ], 422);
+        }
+
+        $reservation->update([
+            'status' => 'completed',
+        ]);
+
+        $reservation->load([
+            'offer',
+            'user',
+        ]);
+
+        return new ReservationResource($reservation);
+    }
 }

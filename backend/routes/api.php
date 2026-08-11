@@ -39,6 +39,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::patch('reservations/{reservation}/cancel',[ReservationController::class, 'cancel']);
 
 
+    //Provider Reservations End Points
+    Route::get('provider/reservations',[ReservationController::class, 'providerIndex']);
+    Route::patch('provider/reservations/{reservation}/confirm',[ReservationController::class, 'providerConfirm']);
+    Route::patch('provider/reservations/{reservation}/cancel',[ReservationController::class, 'providerCancel']);
+    Route::patch('provider/reservations/{reservation}/complete',[ReservationController::class, 'providerComplete']);
+
     Route::get('user', [AuthController::class, 'user']);
 
     Route::post('logout', [AuthController::class, 'logout']);
