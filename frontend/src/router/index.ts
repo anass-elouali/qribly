@@ -8,6 +8,7 @@ const RegisterView = () => import('@/views/auth/RegisterView.vue')
 const OfferDetailsView = () => import('@/views/offers/OfferDetailsView.vue')
 const OfferFormView = () => import('@/views/offers/OfferFormView.vue')
 const ProfileView = () => import('@/views/profile/ProfileView.vue')
+const NearbyView = () => import('@/views/offers/NearbyView.vue')
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -42,6 +43,11 @@ const router = createRouter({
           path: 'offers/:id',
           name: 'offer-details',
           component: OfferDetailsView,
+        },
+        {
+          path: 'pres-de-moi',
+          name: 'nearby',
+          component: NearbyView,
         },
         {
           path:'profile',

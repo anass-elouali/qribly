@@ -31,6 +31,14 @@ async function handleLogout() {
           Accueil
         </RouterLink>
 
+        <RouterLink
+          :to="{ name: 'nearby' }"
+          class="text-ink/70 transition-colors hover:text-primary"
+          active-class="font-semibold text-primary"
+        >
+          Près de moi
+        </RouterLink>
+
         <template v-if="authStore.isAuthenticated">
           <RouterLink
             :to="{ name: 'offer-create' }"
