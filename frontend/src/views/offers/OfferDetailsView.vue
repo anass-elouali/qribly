@@ -1,17 +1,28 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { RouterLink, useRoute } from 'vue-router'
 import dayjs from 'dayjs'
 import api from '@/services/api'
+import { useAuthStore } from '@/stores/auth'
 import type { Offer } from '@/types/offer'
 import { statusLabel, statusColor, formatPrice } from '@/utils/offer'
 import { resolveStorageUrl } from '@/utils/url'
+import { extractErrorMessage } from '@/utils/errors'
 
 const route = useRoute()
+const authStore = useAuthStore()
 const offer = ref<Offer | null>(null)
 const loading = ref(true)
 const error = ref('')
 const selectedImageIndex = ref(0)
+
+const scheduledAt = ref('')
+const notes = ref('')
+const booking = ref(false)
+const bookingError = ref('')
+const bookingSuccess = ref(false)
+
+const minScheduledAt = dayjs().format('YYYY-MM-DDTHH:mm')
 
 function initials(name: string) {
   return name
@@ -42,8 +53,36 @@ const selectedImageUrl = computed(() => {
   return image ? resolveStorageUrl(image.url) : null
 })
 
+async function submitReservation() {
+  if (!offer.value) {
+    return
+  }
+
+  bookingError.value = ''
+  booking.value = true
+
+  try {
+    await api.post(`/offers/${offer.value.id}/reservations`, {
+      scheduled_at: scheduledAt.value,
+      notes: notes.value || undefined,
+    })
+
+    bookingSuccess.value = true
+    scheduledAt.value = ''
+    notes.value = ''
+  } catch (err) {
+    bookingError.value = extractErrorMessage(err, 'Impossible de réserver ce service.')
+  } finally {
+    booking.value = false
+  }
+}
+
 onMounted(loadOffer)
-watch(() => route.params.id, loadOffer)
+watch(() => route.params.id, () => {
+  loadOffer()
+  bookingSuccess.value = false
+  bookingError.value = ''
+})
 </script>
 
 <template>
@@ -111,6 +150,69 @@ watch(() => route.params.id, loadOffer)
             {{ initials(offer.owner.name) }}
           </span>
           <p class="font-body font-semibold text-ink">{{ offer.owner.name }}</p>
+        </div>
+
+        <div v-if="offer.type === 'service'" class="rounded-md border border-ink/10 bg-surface p-4">
+          <h2 class="mb-3 font-display text-lg font-bold text-primary">Réserver ce service</h2>
+
+          <p v-if="!authStore.isAuthenticated" class="font-body text-sm text-ink/60">
+            <RouterLink :to="{ name: 'login' }" class="font-semibold text-primary hover:underline">
+              Connecte-toi
+            </RouterLink>
+            pour réserver.
+          </p>
+
+          <p v-else-if="offer.owner && offer.owner.id === authStore.user?.id" class="font-body text-sm text-ink/60">
+            C'est ta propre annonce.
+          </p>
+
+          <p
+            v-else-if="bookingSuccess"
+            class="rounded-md bg-status-active/10 px-4 py-3 text-sm text-status-active"
+          >
+            Réservation envoyée ! Retrouve-la dans
+            <RouterLink :to="{ name: 'profile' }" class="font-semibold underline">ton profil</RouterLink>.
+          </p>
+
+          <form v-else class="flex flex-col gap-3" @submit.prevent="submitReservation">
+            <div>
+              <label for="scheduled" class="mb-1 block font-mono text-xs tracking-wide text-ink/60 uppercase">
+                Date et heure
+              </label>
+              <input
+                id="scheduled"
+                v-model="scheduledAt"
+                type="datetime-local"
+                :min="minScheduledAt"
+                required
+                class="w-full rounded-lg border border-ink/15 bg-ground px-3 py-2 font-body outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+              />
+            </div>
+
+            <div>
+              <label for="resa-notes" class="mb-1 block font-mono text-xs tracking-wide text-ink/60 uppercase">
+                Notes (optionnel)
+              </label>
+              <textarea
+                id="resa-notes"
+                v-model="notes"
+                rows="2"
+                class="w-full rounded-lg border border-ink/15 bg-ground px-3 py-2 font-body outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+              ></textarea>
+            </div>
+
+            <p v-if="bookingError" class="rounded-md bg-status-reserved/10 px-3 py-2 text-sm text-status-reserved">
+              {{ bookingError }}
+            </p>
+
+            <button
+              type="submit"
+              :disabled="booking"
+              class="rounded-lg bg-accent px-4 py-2.5 font-semibold text-ink transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {{ booking ? 'Envoi…' : 'Réserver' }}
+            </button>
+          </form>
         </div>
       </div>
     </div>
