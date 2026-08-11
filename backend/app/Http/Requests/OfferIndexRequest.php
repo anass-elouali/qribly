@@ -53,6 +53,11 @@ class OfferIndexRequest extends FormRequest
                 'numeric',
                 'min:0',
             ],
+
+            'mine' => [
+                'nullable',
+                'boolean',
+            ],
         ];
     }
 

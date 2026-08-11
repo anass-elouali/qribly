@@ -53,7 +53,9 @@ class OfferController extends Controller
             $query->where('price', '<=', $maxPrice);
         });
 
-
+        $query->when($filters['mine'] ?? null, function ($query) use ($request) {
+            $query->where('user_id', $request->user('sanctum')?->id);
+        });
 
         $offers = $query->latest()->paginate(15);
         
