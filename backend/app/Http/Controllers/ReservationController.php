@@ -7,6 +7,7 @@ use App\Models\Offer;
 use App\Http\Resources\ReservationResource;
 use App\Models\Reservation;
 use Illuminate\Http\Request;
+use App\Notifications\ReservationCreated;
 
 class ReservationController extends Controller
 {
@@ -45,6 +46,12 @@ class ReservationController extends Controller
             'user',
             'offer',
         ]);
+
+        $offer->load('user');
+        
+        $offer->user->notify(
+            new ReservationCreated($reservation)
+        );
 
         return (new ReservationResource($reservation))
             ->response()
