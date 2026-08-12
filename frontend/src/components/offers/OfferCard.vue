@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
 import type { Category } from '@/types/offer'
-import { statusLabel, statusColor, formatPrice } from '@/utils/offer'
+import { statusLabel, statusColor, formatPrice, formatDistance } from '@/utils/offer'
 import { resolveStorageUrl } from '@/utils/url'
 import FavoriteButton from '@/components/offers/FavoriteButton.vue'
 
@@ -21,10 +21,6 @@ const thumbnailUrl = computed(() => {
   const first = props.images?.[0]
   return first ? resolveStorageUrl(first.url) : null
 })
-
-function formatDistance(meters: number) {
-  return meters < 1000 ? `${Math.round(meters)} m` : `${(meters / 1000).toFixed(1)} km`
-}
 </script>
 
 <template>

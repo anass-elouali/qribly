@@ -15,3 +15,7 @@ export const statusColor: Record<string, string> = {
 export function formatPrice(value: string | number) {
   return new Intl.NumberFormat('fr-MA').format(Number(value))
 }
+
+export function formatDistance(meters: number) {
+  return meters < 1000 ? `${Math.round(meters)} m` : `${(meters / 1000).toFixed(1)} km`
+}
