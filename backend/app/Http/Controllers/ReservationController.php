@@ -8,6 +8,10 @@ use App\Http\Resources\ReservationResource;
 use App\Models\Reservation;
 use Illuminate\Http\Request;
 use App\Notifications\ReservationCreated;
+use App\Notifications\ReservationConfirmed;
+use App\Notifications\ReservationCancelled;
+use App\Notifications\ReservationCompleted;
+
 
 class ReservationController extends Controller
 {
@@ -78,6 +82,10 @@ class ReservationController extends Controller
             'cancelled_by' => $request->user()->id,
         ]);
 
+        $reservation->offer->user->notify(
+            new ReservationCancelled($reservation)
+        );
+
 
         return response()->json([
             'message' => 'Reservation cancelled successfully.',
@@ -127,6 +135,10 @@ class ReservationController extends Controller
             'user',
         ]);
 
+        $reservation->user->notify(
+            new ReservationConfirmed($reservation)
+        );
+
         return new ReservationResource($reservation);
     }
 
@@ -153,6 +165,10 @@ class ReservationController extends Controller
             'user',
         ]);
 
+        $reservation->user->notify(
+            new ReservationCancelled($reservation)
+        ); 
+
         return new ReservationResource($reservation);
     }
 
@@ -176,6 +192,10 @@ class ReservationController extends Controller
             'offer',
             'user',
         ]);
+
+        $reservation->user->notify(
+            new ReservationCompleted($reservation)
+        );
 
         return new ReservationResource($reservation);
     }
