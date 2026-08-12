@@ -21,11 +21,33 @@ let map: L.Map | null = null
 let radiusCircle: L.Circle | null = null
 let markersLayer: L.LayerGroup | null = null
 
+type PriceMarkerAlignment = 'start' | 'center' | 'end'
+
+const PRICE_MARKER_EDGE_PADDING = 8
+const PRICE_MARKER_HORIZONTAL_PADDING = 24
+const PRICE_MARKER_CHARACTER_WIDTH = 7.25
+
+function priceMarkerAlignment(offer: Offer, label: string): PriceMarkerAlignment {
+  if (!map || !offer.location) return 'center'
+
+  const point = map.latLngToContainerPoint([offer.location.latitude, offer.location.longitude])
+  const mapWidth = map.getSize().x
+  const estimatedWidth = PRICE_MARKER_HORIZONTAL_PADDING + label.length * PRICE_MARKER_CHARACTER_WIDTH
+
+  if (point.x - estimatedWidth / 2 < PRICE_MARKER_EDGE_PADDING) return 'start'
+  if (point.x + estimatedWidth / 2 > mapWidth - PRICE_MARKER_EDGE_PADDING) return 'end'
+  return 'center'
+}
+
 function priceIcon(offer: Offer) {
+  const label = `${formatPrice(offer.price)} DH`
+  const alignment = priceMarkerAlignment(offer, label)
+
   return L.divIcon({
-    className: '',
-    html: `<div class="whitespace-nowrap rounded-full border-2 border-surface bg-accent px-2.5 py-1 font-mono text-xs font-bold text-ink shadow-md">${formatPrice(offer.price)} DH</div>`,
-    iconAnchor: [22, 14],
+    className: 'offer-price-icon',
+    html: `<div class="offer-price-marker" data-alignment="${alignment}">${label}</div>`,
+    iconSize: [0, 0],
+    iconAnchor: [0, 0],
   })
 }
 
@@ -160,7 +182,7 @@ onMounted(() => {
   markersLayer = L.layerGroup().addTo(map)
   renderMarkers()
 
-  map.on('zoomend', renderMarkers)
+  map.on('moveend resize', renderMarkers)
 })
 
 watch(() => props.offers, renderMarkers)
@@ -191,5 +213,38 @@ onUnmounted(() => {
 
 :deep(.offer-preview-tooltip::before) {
   display: none;
+}
+
+:deep(.offer-price-icon) {
+  background: transparent;
+  border: 0;
+  overflow: visible;
+}
+
+:deep(.offer-price-marker) {
+  display: inline-flex;
+  width: max-content;
+  align-items: center;
+  justify-content: center;
+  transform: translate(-50%, -50%);
+  white-space: nowrap;
+  border: 2px solid var(--color-surface);
+  border-radius: 9999px;
+  background: var(--color-accent);
+  padding: 0.25rem 0.625rem;
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.16), 0 2px 4px -2px rgb(0 0 0 / 0.12);
+  color: var(--color-ink);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1rem;
+}
+
+:deep(.offer-price-marker[data-alignment='start']) {
+  transform: translate(0, -50%);
+}
+
+:deep(.offer-price-marker[data-alignment='end']) {
+  transform: translate(-100%, -50%);
 }
 </style>
