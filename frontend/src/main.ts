@@ -7,6 +7,7 @@ import App from './App.vue'
 import router from './router'
 import { useAuthStore } from '@/stores/auth'
 import './style.css'
+import echo from './echo.ts'
 
 dayjs.extend(relativeTime)
 dayjs.locale('fr')
