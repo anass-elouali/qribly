@@ -24,8 +24,8 @@ let markersLayer: L.LayerGroup | null = null
 function priceIcon(offer: Offer) {
   return L.divIcon({
     className: '',
-    html: `<div class="whitespace-nowrap rounded bg-accent px-2 py-1 font-mono text-xs font-bold text-ink shadow-md">${formatPrice(offer.price)} DH</div>`,
-    iconAnchor: [20, 12],
+    html: `<div class="whitespace-nowrap rounded-full border-2 border-surface bg-accent px-2.5 py-1 font-mono text-xs font-bold text-ink shadow-md">${formatPrice(offer.price)} DH</div>`,
+    iconAnchor: [22, 14],
   })
 }
 
@@ -59,7 +59,7 @@ function previewHtml(offer: Offer) {
 function clusterIcon(count: number) {
   return L.divIcon({
     className: '',
-    html: `<div class="flex h-10 w-10 items-center justify-center rounded-full bg-primary font-mono text-sm font-bold text-surface shadow-md">${count}</div>`,
+    html: `<div class="flex h-10 w-10 items-center justify-center rounded-full border-2 border-surface bg-primary font-mono text-sm font-bold text-surface shadow-md">${count}</div>`,
     iconAnchor: [20, 20],
   })
 }
