@@ -1,0 +1,34 @@
+<?php
+
+namespace App\Notifications;
+
+use App\Models\Reservation;
+use Illuminate\Bus\Queueable;
+use Illuminate\Notifications\Notification;
+
+class ReservationConfirmed extends Notification
+{
+    use Queueable;
+
+    public function __construct(
+        public Reservation $reservation
+    ) {
+    }
+
+    public function via(object $notifiable): array
+    {
+        return ['database'];
+    }
+
+    public function toArray(object $notifiable): array
+    {
+        return [
+            'type' => 'reservation_confirmed',
+            'title' => 'Reservation confirmed',
+            'message' => 'Your reservation has been confirmed.',
+            'reservation_id' => $this->reservation->id,
+            'offer_id' => $this->reservation->offer_id,
+            'scheduled_at' => $this->reservation->scheduled_at,
+        ];
+    }
+}
