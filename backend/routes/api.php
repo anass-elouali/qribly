@@ -56,7 +56,9 @@ Route::middleware('auth:sanctum')->group(function () {
     
     // Notifications
     Route::get('notifications', [NotificationController::class, 'index']);
-    
+    Route::patch('notifications/{notification}/read',[NotificationController::class, 'markAsRead']);
+    Route::patch('notifications/read-all',[NotificationController::class, 'markAllAsRead']);
+
     Route::get('user', [AuthController::class, 'user']);
     Route::post('logout', [AuthController::class, 'logout']);
 });
