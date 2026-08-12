@@ -6,6 +6,7 @@ import { fetchCategories } from '@/services/categories'
 import type { Category, Offer } from '@/types/offer'
 import { statusLabel } from '@/utils/offer'
 import { extractErrorMessage } from '@/utils/errors'
+import { resolveStorageUrl } from '@/utils/url'
 
 const route = useRoute()
 const router = useRouter()
@@ -27,10 +28,12 @@ const status = ref<'active' | 'reserved' | 'sold' | 'inactive'>('active')
 const latitude = ref<number | null>(null)
 const longitude = ref<number | null>(null)
 const images = ref<File[]>([])
+const existingImages = ref<{ id: number; url: string }[]>([])
 
 const loadingOffer = ref(false)
 const submitting = ref(false)
 const locating = ref(false)
+const uploadingImages = ref(false)
 const error = ref('')
 
 async function loadOfferForEdit() {
@@ -53,10 +56,60 @@ async function loadOfferForEdit() {
     status.value = offer.status
     latitude.value = offer.location?.latitude ?? null
     longitude.value = offer.location?.longitude ?? null
+    existingImages.value = offer.images ?? []
   } catch {
     error.value = "Impossible de charger cette annonce."
   } finally {
     loadingOffer.value = false
+  }
+}
+
+async function onAddImages(event: Event) {
+  const input = event.target as HTMLInputElement
+  const files = input.files ? Array.from(input.files) : []
+  input.value = ''
+
+  if (!files.length || !offerId.value) {
+    return
+  }
+
+  const slotsLeft = 5 - existingImages.value.length
+  const selected = files.slice(0, Math.max(0, slotsLeft))
+
+  if (!selected.length) {
+    return
+  }
+
+  error.value = ''
+  uploadingImages.value = true
+
+  try {
+    const formData = new FormData()
+    selected.forEach((file) => formData.append('images[]', file))
+
+    const response = await api.post<{ images: { id: number; url: string }[] }>(
+      `/offers/${offerId.value}/images`,
+      formData,
+    )
+
+    existingImages.value = response.data.images
+  } catch (err) {
+    error.value = extractErrorMessage(err, "Impossible d'ajouter ces photos.")
+  } finally {
+    uploadingImages.value = false
+  }
+}
+
+async function removeExistingImage(imageId: number) {
+  if (!offerId.value) {
+    return
+  }
+
+  try {
+    await api.delete(`/offers/${offerId.value}/images/${imageId}`)
+    existingImages.value = existingImages.value.filter((image) => image.id !== imageId)
+  } catch {
+    error.value = 'Impossible de supprimer cette photo.'
   }
 }
 
@@ -149,7 +202,44 @@ onMounted(async () => {
     <p v-if="loadingOffer" class="font-mono text-sm text-ink/50">Chargement…</p>
 
     <form v-else class="flex flex-col gap-5" @submit.prevent="handleSubmit">
-      <div v-if="!isEdit">
+      <div v-if="isEdit">
+        <label class="mb-2 block font-mono text-xs tracking-wide text-ink/60 uppercase">
+          Photos ({{ existingImages.length }}/5)
+        </label>
+
+        <div v-if="existingImages.length" class="mb-3 flex flex-wrap gap-2">
+          <div v-for="image in existingImages" :key="image.id" class="group relative h-20 w-20">
+            <img
+              :src="resolveStorageUrl(image.url)"
+              alt=""
+              class="h-full w-full rounded-md object-cover"
+            />
+            <button
+              type="button"
+              class="absolute -top-2 -right-2 flex h-6 w-6 items-center justify-center rounded-full bg-status-reserved text-xs font-bold text-surface shadow"
+              aria-label="Supprimer cette photo"
+              @click="removeExistingImage(image.id)"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+
+        <input
+          type="file"
+          accept="image/png,image/jpeg,image/webp,image/avif"
+          multiple
+          :disabled="uploadingImages || existingImages.length >= 5"
+          class="block w-full text-sm text-ink/70 file:mr-3 file:rounded-md file:border-0 file:bg-primary file:px-3 file:py-2 file:text-sm file:font-semibold file:text-surface disabled:opacity-50"
+          @change="onAddImages"
+        />
+        <p v-if="uploadingImages" class="mt-2 font-mono text-xs text-ink/50">Envoi…</p>
+        <p v-else-if="existingImages.length >= 5" class="mt-2 font-mono text-xs text-ink/50">
+          Maximum de 5 photos atteint.
+        </p>
+      </div>
+
+      <div v-else>
         <label class="mb-2 block font-mono text-xs tracking-wide text-ink/60 uppercase">
           Photos (5 max)
         </label>
