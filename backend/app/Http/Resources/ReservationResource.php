@@ -38,7 +38,9 @@ class ReservationResource extends JsonResource
                     'price' => $this->offer->price,
                 ];
             }),
-            
+
+            'review' => new ReviewResource($this->whenLoaded('review')),
+
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
         ];

@@ -9,6 +9,7 @@ import { statusLabel, statusColor, formatPrice } from '@/utils/offer'
 import { resolveStorageUrl } from '@/utils/url'
 import { extractErrorMessage } from '@/utils/errors'
 import FavoriteButton from '@/components/offers/FavoriteButton.vue'
+import OfferReviews from '@/components/reviews/OfferReviews.vue'
 
 const route = useRoute()
 const authStore = useAuthStore()
@@ -219,6 +220,10 @@ watch(() => route.params.id, () => {
           </form>
         </div>
       </div>
+    </div>
+
+    <div v-if="offer" class="mt-10 border-t border-ink/10 pt-6">
+      <OfferReviews :offer-id="offer.id" />
     </div>
   </div>
 </template>

@@ -14,7 +14,7 @@ class ReservationController extends Controller
     public function index(Request $request) {
         $reservations = $request->user()
           ->reservations()
-            ->with('offer')
+            ->with(['offer', 'review'])
             ->latest('scheduled_at')
             ->paginate(15);
 

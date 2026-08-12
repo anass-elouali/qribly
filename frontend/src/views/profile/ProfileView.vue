@@ -7,6 +7,8 @@ import { useFavoritesStore } from '@/stores/favorites'
 import api from '@/services/api'
 import OfferCard from '@/components/offers/OfferCard.vue'
 import ReservationRow from '@/components/reservations/ReservationRow.vue'
+import ReviewForm from '@/components/reviews/ReviewForm.vue'
+import StarRating from '@/components/reviews/StarRating.vue'
 import type { Offer, PaginatedResponse } from '@/types/offer'
 import type { Reservation } from '@/types/reservation'
 
@@ -239,6 +241,20 @@ onMounted(() => loadTab('offers'))
             >
               Annuler
             </button>
+          </template>
+
+          <template v-if="reservation.status === 'completed'" #review>
+            <div v-if="reservation.review" class="flex items-center gap-2">
+              <StarRating :rating="reservation.review.rating" />
+              <p v-if="reservation.review.comment" class="font-body text-sm text-ink/70">
+                {{ reservation.review.comment }}
+              </p>
+            </div>
+            <ReviewForm
+              v-else
+              :reservation-id="reservation.id"
+              @submitted="(review) => (reservation.review = review)"
+            />
           </template>
         </ReservationRow>
       </div>
