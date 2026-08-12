@@ -119,14 +119,8 @@ function goToOffer(offerId: number) {
 
       <!-- RADAR -->
       <div v-if="viewMode === 'radar'" class="grid gap-6 md:grid-cols-2">
-        <div class="relative mx-auto aspect-square w-full max-w-[520px]">
-          <OfferMap
-            class="!h-full !w-full !rounded-full"
-            :center="userPosition"
-            :radius-km="radiusKm"
-            :offers="offers"
-            @select="goToOffer"
-          />
+        <div class="relative h-[500px]">
+          <OfferMap :center="userPosition" :radius-km="radiusKm" :offers="offers" @select="goToOffer" />
           <RadarOverlay />
         </div>
 
