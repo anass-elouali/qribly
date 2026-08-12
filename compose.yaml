@@ -38,9 +38,37 @@ services:
     ports:
       - "8000:8000"
 
+    environment:
+      APP_ROLE: backend
+
+
+    command: php artisan serve --host=0.0.0.0 --port=8000
+
     depends_on:
       postgres:
         condition: service_healthy
+
+  reverb:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+
+    container_name: Qribly-reverb
+    restart: unless-stopped
+
+    working_dir: /var/www
+
+    volumes:
+      - ./backend:/var/www
+
+    ports:
+      - "8080:8080"
+    
+    environment:
+      APP_ROLE: reverb
+
+
+    command: php artisan reverb:start --host=0.0.0.0 --port=8080
 
   
   frontend:
@@ -62,6 +90,11 @@ services:
 
     environment:
       CHOKIDAR_USEPOLLING: "true"
+      VITE_API_URL: http://localhost:8000/api
+      VITE_REVERB_APP_KEY: ${REVERB_APP_KEY}
+      VITE_REVERB_HOST: localhost
+      VITE_REVERB_PORT: 8080
+      VITE_REVERB_SCHEME: http
       
 
     depends_on:
