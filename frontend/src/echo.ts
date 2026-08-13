@@ -10,11 +10,10 @@ const echo = new Echo({
 
     wsHost: import.meta.env.VITE_REVERB_HOST,
     wsPort: Number(import.meta.env.VITE_REVERB_PORT),
-    wssPort: Number(import.meta.env.VITE_REVERB_PORT),
 
-    forceTLS: import.meta.env.VITE_REVERB_SCHEME === 'https',
+    forceTLS: false,
 
-    enabledTransports: ['ws', 'wss'],
+    enabledTransports: ['ws'],
 })
 
 export default echo
