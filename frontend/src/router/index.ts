@@ -9,6 +9,7 @@ const OfferDetailsView = () => import('@/views/offers/OfferDetailsView.vue')
 const OfferFormView = () => import('@/views/offers/OfferFormView.vue')
 const ProfileView = () => import('@/views/profile/ProfileView.vue')
 const NearbyView = () => import('@/views/offers/NearbyView.vue')
+const MessagesView = () => import('@/views/messages/MessagesView.vue')
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -56,7 +57,23 @@ const router = createRouter({
           meta: {
             requiresAuth:true,
           }
-        }
+        },
+        {
+          path: 'messages',
+          name: 'conversations',
+          component: MessagesView,
+          meta: {
+            requiresAuth: true,
+          },
+        },
+        {
+          path: 'messages/:id',
+          name: 'conversation',
+          component: MessagesView,
+          meta: {
+            requiresAuth: true,
+          },
+        },
       ]
     },
      {

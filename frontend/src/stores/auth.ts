@@ -2,6 +2,7 @@ import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import api from '@/services/api'
 import { useFavoritesStore } from '@/stores/favorites'
+import { useChatStore } from '@/stores/chat'
 
 interface User {
   id: number
@@ -89,6 +90,7 @@ export const useAuthStore = defineStore('auth', () => {
 
       localStorage.removeItem('qribly_token')
       useFavoritesStore().reset()
+      useChatStore().reset()
     }
   }
 

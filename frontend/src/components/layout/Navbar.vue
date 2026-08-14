@@ -1,10 +1,60 @@
 <script setup lang="ts">
+import { onBeforeUnmount, onMounted, watch } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { useChatStore } from '@/stores/chat'
+import echo from '@/echo'
 import QriblyLogo from '@/components/branding/QriblyLogo.vue'
 
 const authStore = useAuthStore()
+const chatStore = useChatStore()
 const router = useRouter()
+
+let subscribedUserId: number | null = null
+
+function unsubscribeFromInbox() {
+  if (subscribedUserId) {
+    echo.leave(`user.${subscribedUserId}`)
+    subscribedUserId = null
+  }
+}
+
+function subscribeToInbox() {
+  const userId = authStore.user?.id
+  if (!userId || userId === subscribedUserId) {
+    return
+  }
+
+  unsubscribeFromInbox()
+  subscribedUserId = userId
+
+  // Any message sent to this user, in any conversation, refreshes the list
+  // so the unread badge and previews stay live without a page reload.
+  echo.private(`user.${userId}`).listen('MessageSent', () => {
+    chatStore.load(true)
+  })
+}
+
+onMounted(() => {
+  if (authStore.isAuthenticated) {
+    chatStore.load()
+    subscribeToInbox()
+  }
+})
+
+watch(
+  () => authStore.isAuthenticated,
+  (isAuthenticated) => {
+    if (isAuthenticated) {
+      chatStore.load()
+      subscribeToInbox()
+    } else {
+      unsubscribeFromInbox()
+    }
+  },
+)
+
+onBeforeUnmount(unsubscribeFromInbox)
 
 async function handleLogout() {
   await authStore.logout()
@@ -45,6 +95,20 @@ async function handleLogout() {
             class="rounded-md bg-accent px-3.5 py-1.5 font-semibold text-ink transition-opacity hover:opacity-90"
           >
             Publier une annonce
+          </RouterLink>
+
+          <RouterLink
+            :to="{ name: 'conversations' }"
+            class="flex items-center gap-1.5 text-ink/70 transition-colors hover:text-primary"
+            active-class="font-semibold text-primary"
+          >
+            Messages
+            <span
+              v-if="chatStore.unreadCount > 0"
+              class="flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 font-mono text-[0.65rem] font-bold text-ink"
+            >
+              {{ chatStore.unreadCount }}
+            </span>
           </RouterLink>
 
           <RouterLink

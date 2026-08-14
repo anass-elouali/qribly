@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { RouterLink, useRoute } from 'vue-router'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import dayjs from 'dayjs'
 import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
+import { useChatStore } from '@/stores/chat'
 import type { Offer } from '@/types/offer'
+import type { Conversation } from '@/types/conversation'
 import { statusLabel, statusColor, formatPrice } from '@/utils/offer'
 import { resolveStorageUrl } from '@/utils/url'
 import { extractErrorMessage } from '@/utils/errors'
@@ -12,11 +14,15 @@ import FavoriteButton from '@/components/offers/FavoriteButton.vue'
 import OfferReviews from '@/components/reviews/OfferReviews.vue'
 
 const route = useRoute()
+const router = useRouter()
 const authStore = useAuthStore()
+const chatStore = useChatStore()
 const offer = ref<Offer | null>(null)
 const loading = ref(true)
 const error = ref('')
 const selectedImageIndex = ref(0)
+const contacting = ref(false)
+const contactError = ref('')
 
 const scheduledAt = ref('')
 const notes = ref('')
@@ -76,6 +82,25 @@ async function submitReservation() {
     bookingError.value = extractErrorMessage(err, 'Impossible de réserver ce service.')
   } finally {
     booking.value = false
+  }
+}
+
+async function contactOwner() {
+  if (!offer.value?.owner) {
+    return
+  }
+
+  contacting.value = true
+  contactError.value = ''
+
+  try {
+    const response = await api.post<Conversation>('/conversations', { user_id: offer.value.owner.id })
+    chatStore.upsertConversation(response.data)
+    router.push({ name: 'conversation', params: { id: response.data.id } })
+  } catch {
+    contactError.value = 'Impossible de contacter le vendeur pour le moment.'
+  } finally {
+    contacting.value = false
   }
 }
 
@@ -148,13 +173,29 @@ watch(() => route.params.id, () => {
 
         <p class="font-mono text-xs text-ink/40">Publié {{ dayjs(offer.created_at).fromNow() }}</p>
 
-        <div v-if="offer.owner" class="flex items-center gap-3 rounded-md border border-ink/10 bg-surface p-3">
-          <span
-            class="flex h-10 w-10 items-center justify-center rounded-full bg-primary font-mono text-xs font-bold text-surface"
-          >
-            {{ initials(offer.owner.name) }}
-          </span>
-          <p class="font-body font-semibold text-ink">{{ offer.owner.name }}</p>
+        <div v-if="offer.owner" class="flex flex-col gap-2 rounded-md border border-ink/10 bg-surface p-3">
+          <div class="flex items-center justify-between gap-3">
+            <div class="flex items-center gap-3">
+              <span
+                class="flex h-10 w-10 items-center justify-center rounded-full bg-primary font-mono text-xs font-bold text-surface"
+              >
+                {{ initials(offer.owner.name) }}
+              </span>
+              <p class="font-body font-semibold text-ink">{{ offer.owner.name }}</p>
+            </div>
+
+            <button
+              v-if="authStore.isAuthenticated && offer.owner.id !== authStore.user?.id"
+              type="button"
+              :disabled="contacting"
+              class="shrink-0 rounded-md border border-primary px-3 py-1.5 text-sm text-primary transition hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-60"
+              @click="contactOwner"
+            >
+              {{ contacting ? 'Ouverture…' : 'Contacter' }}
+            </button>
+          </div>
+
+          <p v-if="contactError" class="font-body text-sm text-status-reserved">{{ contactError }}</p>
         </div>
 
         <div v-if="offer.type === 'service'" class="rounded-md border border-ink/10 bg-surface p-4">
