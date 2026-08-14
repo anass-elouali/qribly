@@ -36,8 +36,13 @@ return [
             'secret' => env('REVERB_APP_SECRET'),
             'app_id' => env('REVERB_APP_ID'),
             'options' => [
-                'host' => env('REVERB_HOST'),
-                'port' => env('REVERB_PORT', 443),
+                // REVERB_HOST is the browser-facing hostname (used for the
+                // /broadcasting/auth flow and reverb.php's Origin check). PHP
+                // itself needs a separately reachable target — in Docker that's
+                // the `reverb` service name, not `localhost` — so this falls
+                // back to REVERB_HOST only for non-container setups.
+                'host' => env('REVERB_BROADCAST_HOST', env('REVERB_HOST')),
+                'port' => env('REVERB_BROADCAST_PORT', env('REVERB_PORT', 443)),
                 'scheme' => env('REVERB_SCHEME', 'https'),
                 'useTLS' => env('REVERB_SCHEME', 'https') === 'https',
             ],

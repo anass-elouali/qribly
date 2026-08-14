@@ -70,7 +70,28 @@ services:
 
     command: php artisan reverb:start --host=0.0.0.0 --port=8080
 
-  
+  queue:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+
+    container_name: Qribly-queue
+    restart: unless-stopped
+
+    working_dir: /var/www
+
+    volumes:
+      - ./backend:/var/www
+
+    environment:
+      APP_ROLE: queue
+
+    command: php artisan queue:listen --tries=1 --timeout=0
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   frontend:
     build:
       context: ./frontend

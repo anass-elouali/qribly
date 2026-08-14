@@ -1,5 +1,6 @@
 <?php
 
+use Illuminate\Support\Facades\Broadcast;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\OfferController;
@@ -60,6 +61,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('notifications', [NotificationController::class, 'index']);
     Route::patch('notifications/{notification}/read',[NotificationController::class, 'markAsRead']);
     Route::patch('notifications/read-all',[NotificationController::class, 'markAllAsRead']);
+
+    // Broadcasting auth (private channels) — registered here so it lives under
+    // api/broadcasting/auth: covered by CORS's `api/*` rule and authenticated
+    // via the same Bearer token as the rest of the API, unlike the default
+    // session-based /broadcasting/auth route.
+    Broadcast::routes(['middleware' => ['auth:sanctum']]);
 
     //Conversations Routes
     Route::get('conversations', [ConversationController::class, 'index']);
