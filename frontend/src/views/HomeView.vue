@@ -1,4 +1,3 @@
-```vue
 <script setup lang="ts">
 import { onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
@@ -16,7 +15,6 @@ const categories = ref<Category[]>([])
 const selectedCategory = ref<number | null>(null)
 const selectedType = ref<'product' | 'service' | null>(null)
 
-const search = ref('')
 const page = ref(1)
 const lastPage = ref(1)
 
@@ -93,7 +91,7 @@ onMounted(async () => {
     <!-- Hero -->
     <section class="mb-14">
       <div
-        class="rounded-2xl border border-ink/10 bg-surface-alt
+        class="rounded-2xl border border-ink/10 bg-surface
                px-6 py-8 sm:px-10 sm:py-10 lg:px-16"
       >
         <div class="mx-auto max-w-3xl text-center">
@@ -189,7 +187,7 @@ onMounted(async () => {
     <!-- Filters -->
     <section class="mb-12">
       <div
-        class="flex flex-col gap-6 rounded-xl border border-ink/10 bg-surface-alt
+        class="flex flex-col gap-6 rounded-xl border border-ink/10 bg-surface
               p-5 sm:flex-row sm:items-start sm:gap-8"
       >
         <!-- Type -->
@@ -372,4 +370,3 @@ onMounted(async () => {
     </section>
   </div>
 </template>
-```

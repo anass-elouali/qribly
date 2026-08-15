@@ -39,7 +39,7 @@ const types = [
 
 const statuses = [
   {
-    value: 'available',
+    value: 'active',
     label: 'Disponible',
   },
   {
