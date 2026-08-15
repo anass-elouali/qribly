@@ -74,6 +74,11 @@ const router = createRouter({
             requiresAuth: true,
           },
         },
+        {
+          path: '/search',
+          name: 'search',
+          component: () => import('@/views/SearchView.vue'),
+        },
       ]
     },
      {
@@ -89,7 +94,7 @@ const router = createRouter({
       name: 'register',
       component: RegisterView,
     },
-   
+
     
   ],
 })
