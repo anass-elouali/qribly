@@ -10,6 +10,7 @@ import type { Conversation } from '@/types/conversation'
 import { statusLabel, statusColor, formatPrice } from '@/utils/offer'
 import { resolveStorageUrl } from '@/utils/url'
 import { extractErrorMessage } from '@/utils/errors'
+import { initials } from '@/utils/user'
 import FavoriteButton from '@/components/offers/FavoriteButton.vue'
 import OfferReviews from '@/components/reviews/OfferReviews.vue'
 
@@ -31,15 +32,6 @@ const bookingError = ref('')
 const bookingSuccess = ref(false)
 
 const minScheduledAt = dayjs().format('YYYY-MM-DDTHH:mm')
-
-function initials(name: string) {
-  return name
-    .split(' ')
-    .map((part) => part[0])
-    .join('')
-    .slice(0, 2)
-    .toUpperCase()
-}
 
 async function loadOffer() {
   loading.value = true

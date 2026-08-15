@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRoute } from 'vue-router'
 import dayjs from 'dayjs'
 import { useAuthStore } from '@/stores/auth'
 import { useFavoritesStore } from '@/stores/favorites'
@@ -11,7 +11,9 @@ import ReviewForm from '@/components/reviews/ReviewForm.vue'
 import StarRating from '@/components/reviews/StarRating.vue'
 import type { Offer, PaginatedResponse } from '@/types/offer'
 import type { Reservation } from '@/types/reservation'
+import { initials } from '@/utils/user'
 
+const route = useRoute()
 const authStore = useAuthStore()
 const favoritesStore = useFavoritesStore()
 
@@ -24,7 +26,9 @@ const tabs: { key: Tab; label: string }[] = [
   { key: 'provider', label: 'Réservations reçues' },
 ]
 
-const activeTab = ref<Tab>('offers')
+const initialTab = tabs.some((tab) => tab.key === route.query.tab) ? (route.query.tab as Tab) : 'offers'
+
+const activeTab = ref<Tab>(initialTab)
 const loadedTabs = new Set<Tab>()
 
 const myOffers = ref<Offer[]>([])
@@ -34,15 +38,6 @@ const providerReservations = ref<Reservation[]>([])
 
 const loading = ref(false)
 const error = ref('')
-
-function initials(name: string) {
-  return name
-    .split(' ')
-    .map((part) => part[0])
-    .join('')
-    .slice(0, 2)
-    .toUpperCase()
-}
 
 async function loadTab(tab: Tab) {
   if (loadedTabs.has(tab)) {
@@ -126,7 +121,7 @@ async function providerAction(id: number, action: 'confirm' | 'cancel' | 'comple
   }
 }
 
-onMounted(() => loadTab('offers'))
+onMounted(() => loadTab(initialTab))
 </script>
 
 <template>
