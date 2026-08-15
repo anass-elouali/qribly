@@ -1,17 +1,20 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
-import { RouterLink, useRoute } from 'vue-router'
-import dayjs from 'dayjs'
+import { computed, onMounted, ref } from 'vue'
+import { useRoute } from 'vue-router'
+
 import { useAuthStore } from '@/stores/auth'
 import { useFavoritesStore } from '@/stores/favorites'
 import api from '@/services/api'
-import OfferCard from '@/components/offers/OfferCard.vue'
-import ReservationRow from '@/components/reservations/ReservationRow.vue'
-import ReviewForm from '@/components/reviews/ReviewForm.vue'
-import StarRating from '@/components/reviews/StarRating.vue'
+
+import ProfileHeader from '@/components/profile/ProfileHeader.vue'
+import ProfileTabs from '@/components/profile/ProfileTabs.vue'
+import ProfileOffers from '@/components/profile/ProfileOffers.vue'
+import ProfileFavorites from '@/components/profile/ProfileFavorites.vue'
+import ProfileReservations from '@/components/profile/ProfileReservations.vue'
+import ProfileProviderReservations from '@/components/profile/ProfileProviderReservations.vue'
+
 import type { Offer, PaginatedResponse } from '@/types/offer'
 import type { Reservation } from '@/types/reservation'
-import { initials } from '@/utils/user'
 
 const route = useRoute()
 const authStore = useAuthStore()
@@ -26,10 +29,12 @@ const tabs: { key: Tab; label: string }[] = [
   { key: 'provider', label: 'Réservations reçues' },
 ]
 
-const initialTab = tabs.some((tab) => tab.key === route.query.tab) ? (route.query.tab as Tab) : 'offers'
+const initialTab: Tab =
+  tabs.some((tab) => tab.key === route.query.tab)
+    ? (route.query.tab as Tab)
+    : 'offers'
 
 const activeTab = ref<Tab>(initialTab)
-const loadedTabs = new Set<Tab>()
 
 const myOffers = ref<Offer[]>([])
 const favorites = ref<Offer[]>([])
@@ -38,6 +43,14 @@ const providerReservations = ref<Reservation[]>([])
 
 const loading = ref(false)
 const error = ref('')
+
+const loadedTabs = new Set<Tab>()
+
+/*
+|--------------------------------------------------------------------------
+| Data loading
+|--------------------------------------------------------------------------
+*/
 
 async function loadTab(tab: Tab) {
   if (loadedTabs.has(tab)) {
@@ -49,16 +62,34 @@ async function loadTab(tab: Tab) {
 
   try {
     if (tab === 'offers') {
-      const response = await api.get<PaginatedResponse<Offer>>('/offers', { params: { mine: 1 } })
+      const response = await api.get<PaginatedResponse<Offer>>('/offers', {
+        params: {
+          mine: 1,
+        },
+      })
+
       myOffers.value = response.data.data
-    } else if (tab === 'favorites') {
+    }
+
+    if (tab === 'favorites') {
       const response = await api.get<PaginatedResponse<Offer>>('/favorites')
+
       favorites.value = response.data.data
-    } else if (tab === 'reservations') {
-      const response = await api.get<PaginatedResponse<Reservation>>('/reservations')
+    }
+
+    if (tab === 'reservations') {
+      const response = await api.get<PaginatedResponse<Reservation>>(
+        '/reservations',
+      )
+
       reservations.value = response.data.data
-    } else {
-      const response = await api.get<PaginatedResponse<Reservation>>('/provider/reservations')
+    }
+
+    if (tab === 'provider') {
+      const response = await api.get<PaginatedResponse<Reservation>>(
+        '/provider/reservations',
+      )
+
       providerReservations.value = response.data.data
     }
 
@@ -70,10 +101,22 @@ async function loadTab(tab: Tab) {
   }
 }
 
+/*
+|--------------------------------------------------------------------------
+| Tabs
+|--------------------------------------------------------------------------
+*/
+
 function selectTab(tab: Tab) {
   activeTab.value = tab
   loadTab(tab)
 }
+
+/*
+|--------------------------------------------------------------------------
+| Offers
+|--------------------------------------------------------------------------
+*/
 
 async function deleteOffer(id: number) {
   if (!confirm('Supprimer cette annonce ?')) {
@@ -82,25 +125,47 @@ async function deleteOffer(id: number) {
 
   try {
     await api.delete(`/offers/${id}`)
-    myOffers.value = myOffers.value.filter((offer) => offer.id !== id)
+
+    myOffers.value = myOffers.value.filter(
+      (offer) => offer.id !== id,
+    )
   } catch {
     error.value = "Impossible de supprimer l'annonce."
   }
 }
 
+/*
+|--------------------------------------------------------------------------
+| Favorites
+|--------------------------------------------------------------------------
+*/
+
 async function removeFavorite(id: number) {
   try {
     await favoritesStore.toggle(id)
-    favorites.value = favorites.value.filter((offer) => offer.id !== id)
+
+    favorites.value = favorites.value.filter(
+      (offer) => offer.id !== id,
+    )
   } catch {
     error.value = 'Impossible de retirer ce favori.'
   }
 }
 
+/*
+|--------------------------------------------------------------------------
+| User reservations
+|--------------------------------------------------------------------------
+*/
+
 async function cancelReservation(id: number) {
   try {
     await api.patch(`/reservations/${id}/cancel`)
-    const reservation = reservations.value.find((r) => r.id === id)
+
+    const reservation = reservations.value.find(
+      (reservation) => reservation.id === id,
+    )
+
     if (reservation) {
       reservation.status = 'cancelled'
     }
@@ -109,189 +174,136 @@ async function cancelReservation(id: number) {
   }
 }
 
-async function providerAction(id: number, action: 'confirm' | 'cancel' | 'complete') {
+function handleReviewSubmitted(
+  reservation: Reservation,
+  review: NonNullable<Reservation['review']>,
+) {
+  reservation.review = review
+}
+
+/*
+|--------------------------------------------------------------------------
+| Provider reservations
+|--------------------------------------------------------------------------
+*/
+
+async function providerAction(
+  id: number,
+  action: 'confirm' | 'cancel' | 'complete',
+) {
   try {
     await api.patch(`/provider/reservations/${id}/${action}`)
-    const reservation = providerReservations.value.find((r) => r.id === id)
-    if (reservation) {
-      reservation.status = action === 'confirm' ? 'confirmed' : action === 'complete' ? 'completed' : 'cancelled'
+
+    const reservation = providerReservations.value.find(
+      (reservation) => reservation.id === id,
+    )
+
+    if (!reservation) {
+      return
+    }
+
+    if (action === 'confirm') {
+      reservation.status = 'confirmed'
+    }
+
+    if (action === 'complete') {
+      reservation.status = 'completed'
+    }
+
+    if (action === 'cancel') {
+      reservation.status = 'cancelled'
     }
   } catch {
     error.value = 'Impossible de mettre à jour cette réservation.'
   }
 }
 
-onMounted(() => loadTab(initialTab))
+/*
+|--------------------------------------------------------------------------
+| Profile stats
+|--------------------------------------------------------------------------
+*/
+
+const offersCount = computed(() => myOffers.value.length)
+const favoritesCount = computed(() => favorites.value.length)
+const reservationsCount = computed(() => reservations.value.length)
+
+/*
+|--------------------------------------------------------------------------
+| Initial load
+|--------------------------------------------------------------------------
+*/
+
+onMounted(() => {
+  loadTab(initialTab)
+})
 </script>
 
 <template>
-  <div class="mx-auto max-w-5xl px-6 py-8">
-    <div v-if="authStore.user" class="mb-8 flex items-center gap-4 border-b border-ink/10 pb-6">
-      <span
-        class="flex h-14 w-14 items-center justify-center rounded-full bg-primary font-display text-lg font-bold text-surface"
-      >
-        {{ initials(authStore.user.name) }}
-      </span>
-      <div>
-        <p class="font-display text-xl font-bold text-ink">{{ authStore.user.name }}</p>
-        <p class="font-mono text-xs text-ink/50">
-          {{ authStore.user.email }} · membre depuis {{ dayjs(authStore.user.created_at).format('MMMM YYYY') }}
-        </p>
-      </div>
-    </div>
+  <div class="mx-auto max-w-6xl px-6 py-8 lg:py-10">
 
-    <div class="mb-6 flex flex-wrap gap-2 border-b border-ink/10">
-      <button
-        v-for="tab in tabs"
-        :key="tab.key"
-        type="button"
-        class="border-b-2 px-3 py-2 font-mono text-xs tracking-wide uppercase transition-colors"
-        :class="
-          activeTab === tab.key ? 'border-primary text-primary' : 'border-transparent text-ink/50 hover:text-ink'
-        "
-        @click="selectTab(tab.key)"
-      >
-        {{ tab.label }}
-      </button>
-    </div>
+    <!-- Profile header -->
+    <ProfileHeader
+      :offers-count="offersCount"
+      :favorites-count="favoritesCount"
+      :reservations-count="reservationsCount"
+    />
 
-    <p v-if="error" class="mb-4 rounded-md bg-status-reserved/10 px-4 py-3 text-sm text-status-reserved">
+    <!-- Tabs -->
+    <ProfileTabs
+      :tabs="tabs"
+      :active-tab="activeTab"
+      @select="selectTab"
+    />
+
+    <!-- Error -->
+    <p
+      v-if="error"
+      class="mb-5 rounded-md bg-status-reserved/10 px-4 py-3 text-sm text-status-reserved"
+    >
       {{ error }}
     </p>
 
-    <p v-if="loading" class="font-mono text-sm text-ink/50">Chargement…</p>
+    <!-- Loading -->
+    <div
+      v-if="loading"
+      class="flex min-h-48 items-center justify-center"
+    >
+      <p class="font-mono text-sm text-ink/50">
+        Chargement…
+      </p>
+    </div>
 
+    <!-- Content -->
     <template v-else>
-      <div v-if="activeTab === 'offers'">
-        <p v-if="myOffers.length === 0" class="font-mono text-sm text-ink/50">
-          Tu n'as encore publié aucune annonce.
-        </p>
-        <div v-else class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          <OfferCard
-            v-for="offer in myOffers"
-            :id="offer.id"
-            :key="offer.id"
-            :title="offer.title"
-            :price="offer.price"
-            :status="offer.status"
-            :is-negotiable="offer.is_negotiable"
-            :category="offer.category ?? null"
-            :images="offer.images"
-          >
-            <template #actions>
-              <RouterLink
-                :to="{ name: 'offer-edit', params: { id: offer.id } }"
-                class="flex-1 rounded-md border border-ink/15 px-3 py-1.5 text-center text-sm text-ink/70 transition hover:border-primary hover:text-primary"
-              >
-                Modifier
-              </RouterLink>
-              <button
-                type="button"
-                class="flex-1 rounded-md border border-ink/15 px-3 py-1.5 text-sm text-status-reserved transition hover:border-status-reserved"
-                @click="deleteOffer(offer.id)"
-              >
-                Supprimer
-              </button>
-            </template>
-          </OfferCard>
-        </div>
-      </div>
 
-      <div v-else-if="activeTab === 'favorites'">
-        <p v-if="favorites.length === 0" class="font-mono text-sm text-ink/50">Aucune annonce en favori.</p>
-        <div v-else class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          <OfferCard
-            v-for="offer in favorites"
-            :id="offer.id"
-            :key="offer.id"
-            :title="offer.title"
-            :price="offer.price"
-            :status="offer.status"
-            :is-negotiable="offer.is_negotiable"
-            :category="offer.category ?? null"
-            :images="offer.images"
-          >
-            <template #actions>
-              <button
-                type="button"
-                class="w-full rounded-md border border-ink/15 px-3 py-1.5 text-sm text-ink/70 transition hover:border-primary hover:text-primary"
-                @click="removeFavorite(offer.id)"
-              >
-                Retirer des favoris
-              </button>
-            </template>
-          </OfferCard>
-        </div>
-      </div>
+      <ProfileOffers
+        v-if="activeTab === 'offers'"
+        :offers="myOffers"
+        @delete="deleteOffer"
+      />
 
-      <div v-else-if="activeTab === 'reservations'" class="flex flex-col gap-3">
-        <p v-if="reservations.length === 0" class="font-mono text-sm text-ink/50">Aucune réservation.</p>
-        <ReservationRow v-for="reservation in reservations" :key="reservation.id" :reservation="reservation">
-          <template #actions>
-            <button
-              v-if="['pending', 'confirmed'].includes(reservation.status)"
-              type="button"
-              class="rounded-md border border-ink/15 px-3 py-1.5 text-sm text-status-reserved transition hover:border-status-reserved"
-              @click="cancelReservation(reservation.id)"
-            >
-              Annuler
-            </button>
-          </template>
+      <ProfileFavorites
+        v-else-if="activeTab === 'favorites'"
+        :favorites="favorites"
+        @remove="removeFavorite"
+      />
 
-          <template v-if="reservation.status === 'completed'" #review>
-            <div v-if="reservation.review" class="flex items-center gap-2">
-              <StarRating :rating="reservation.review.rating" />
-              <p v-if="reservation.review.comment" class="font-body text-sm text-ink/70">
-                {{ reservation.review.comment }}
-              </p>
-            </div>
-            <ReviewForm
-              v-else
-              :reservation-id="reservation.id"
-              @submitted="(review) => (reservation.review = review)"
-            />
-          </template>
-        </ReservationRow>
-      </div>
+      <ProfileReservations
+        v-else-if="activeTab === 'reservations'"
+        :reservations="reservations"
+        @cancel="cancelReservation"
+        @review-submitted="handleReviewSubmitted"
+      />
 
-      <div v-else class="flex flex-col gap-3">
-        <p v-if="providerReservations.length === 0" class="font-mono text-sm text-ink/50">
-          Aucune réservation reçue.
-        </p>
-        <ReservationRow
-          v-for="reservation in providerReservations"
-          :key="reservation.id"
-          :reservation="reservation"
-          :person-label="reservation.user ? `réservé par ${reservation.user.name}` : null"
-        >
-          <template #actions>
-            <button
-              v-if="reservation.status === 'pending'"
-              type="button"
-              class="rounded-md border border-status-active px-3 py-1.5 text-sm text-status-active transition hover:bg-status-active/10"
-              @click="providerAction(reservation.id, 'confirm')"
-            >
-              Confirmer
-            </button>
-            <button
-              v-if="reservation.status === 'confirmed'"
-              type="button"
-              class="rounded-md border border-primary px-3 py-1.5 text-sm text-primary transition hover:bg-primary/10"
-              @click="providerAction(reservation.id, 'complete')"
-            >
-              Terminer
-            </button>
-            <button
-              v-if="['pending', 'confirmed'].includes(reservation.status)"
-              type="button"
-              class="rounded-md border border-ink/15 px-3 py-1.5 text-sm text-status-reserved transition hover:border-status-reserved"
-              @click="providerAction(reservation.id, 'cancel')"
-            >
-              Annuler
-            </button>
-          </template>
-        </ReservationRow>
-      </div>
+      <ProfileProviderReservations
+        v-else
+        :reservations="providerReservations"
+        @confirm="providerAction($event, 'confirm')"
+        @cancel="providerAction($event, 'cancel')"
+        @complete="providerAction($event, 'complete')"
+      />
+
     </template>
   </div>
 </template>
