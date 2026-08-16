@@ -52,6 +52,40 @@ const loadedTabs = new Set<Tab>()
 |--------------------------------------------------------------------------
 */
 
+async function fetchTabData(tab: Tab) {
+  if (tab === 'offers') {
+    const response = await api.get<PaginatedResponse<Offer>>('/offers', {
+      params: {
+        mine: 1,
+      },
+    })
+
+    myOffers.value = response.data.data
+  }
+
+  if (tab === 'favorites') {
+    const response = await api.get<PaginatedResponse<Offer>>('/favorites')
+
+    favorites.value = response.data.data
+  }
+
+  if (tab === 'reservations') {
+    const response = await api.get<PaginatedResponse<Reservation>>(
+      '/reservations',
+    )
+
+    reservations.value = response.data.data
+  }
+
+  if (tab === 'provider') {
+    const response = await api.get<PaginatedResponse<Reservation>>(
+      '/provider/reservations',
+    )
+
+    providerReservations.value = response.data.data
+  }
+}
+
 async function loadTab(tab: Tab) {
   if (loadedTabs.has(tab)) {
     return
@@ -61,44 +95,35 @@ async function loadTab(tab: Tab) {
   error.value = ''
 
   try {
-    if (tab === 'offers') {
-      const response = await api.get<PaginatedResponse<Offer>>('/offers', {
-        params: {
-          mine: 1,
-        },
-      })
-
-      myOffers.value = response.data.data
-    }
-
-    if (tab === 'favorites') {
-      const response = await api.get<PaginatedResponse<Offer>>('/favorites')
-
-      favorites.value = response.data.data
-    }
-
-    if (tab === 'reservations') {
-      const response = await api.get<PaginatedResponse<Reservation>>(
-        '/reservations',
-      )
-
-      reservations.value = response.data.data
-    }
-
-    if (tab === 'provider') {
-      const response = await api.get<PaginatedResponse<Reservation>>(
-        '/provider/reservations',
-      )
-
-      providerReservations.value = response.data.data
-    }
-
+    await fetchTabData(tab)
     loadedTabs.add(tab)
   } catch {
     error.value = 'Impossible de charger cette section.'
   } finally {
     loading.value = false
   }
+}
+
+// Loads the other tabs quietly in the background so the header counts
+// (annonces/favoris/réservations) are accurate from the start instead of
+// showing 0 until the user happens to click each tab. Doesn't touch the
+// visible loading/error state — that stays tied to the active tab only.
+async function preloadRemainingCounts() {
+  const remaining = tabs
+    .map((tab) => tab.key)
+    .filter((key) => key !== initialTab)
+
+  await Promise.allSettled(
+    remaining.map(async (tab) => {
+      try {
+        await fetchTabData(tab)
+        loadedTabs.add(tab)
+      } catch {
+        // Silent — this is only for the header counts; the tab itself
+        // will retry when the user actually opens it.
+      }
+    }),
+  )
 }
 
 /*
@@ -236,6 +261,7 @@ const reservationsCount = computed(() => reservations.value.length)
 
 onMounted(() => {
   loadTab(initialTab)
+  preloadRemainingCounts()
 })
 </script>
 

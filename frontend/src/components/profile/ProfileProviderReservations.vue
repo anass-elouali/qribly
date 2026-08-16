@@ -92,13 +92,16 @@ const filteredReservations = computed(() => {
 */
 
 const selectedReservation = ref<Reservation | null>(null)
+const contactError = ref('')
 
 function viewReservation(reservation: Reservation) {
   selectedReservation.value = reservation
+  contactError.value = ''
 }
 
 function closeReservationDetails() {
   selectedReservation.value = null
+  contactError.value = ''
 }
 
 /*
@@ -132,6 +135,8 @@ async function messageCustomer(userId: number) {
     return
   }
 
+  contactError.value = ''
+
   try {
     const response = await api.post('/conversations', {
       user_id: userId,
@@ -149,8 +154,8 @@ async function messageCustomer(userId: number) {
         id: conversation.id,
       },
     })
-  } catch (error) {
-    console.error('Failed to open conversation:', error)
+  } catch {
+    contactError.value = 'Impossible de contacter ce client pour le moment.'
   }
 }
 </script>
@@ -298,6 +303,7 @@ async function messageCustomer(userId: number) {
     <ReservationDetailsModal
       v-if="selectedReservation"
       :reservation="selectedReservation"
+      :contact-error="contactError"
       @close="closeReservationDetails"
       @message="messageCustomer"
       @confirm="confirmReservation"

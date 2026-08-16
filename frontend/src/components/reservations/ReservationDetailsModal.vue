@@ -9,6 +9,7 @@ import { initials } from '@/utils/user'
 
 defineProps<{
   reservation: Reservation
+  contactError?: string
 }>()
 
 const emit = defineEmits<{
@@ -191,6 +192,13 @@ function close() {
       <div
         class="flex flex-wrap gap-2 border-t border-ink/10 bg-ink/[0.02] px-5 py-4"
       >
+        <p
+          v-if="contactError"
+          class="w-full font-mono text-xs text-status-reserved"
+        >
+          {{ contactError }}
+        </p>
+
         <button
           v-if="['pending', 'confirmed'].includes(reservation.status)"
           type="button"

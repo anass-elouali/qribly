@@ -14,6 +14,7 @@ import api from '@/services/api'
 import echo from '@/echo'
 import { useAuthStore } from '@/stores/auth'
 import { useChatStore } from '@/stores/chat'
+import { initials } from '@/utils/user'
 
 import type { Conversation, Message } from '@/types/conversation'
 import type { PaginatedResponse } from '@/types/offer'
@@ -48,16 +49,6 @@ function otherParticipant(conversation: Conversation) {
   return conversation.user_one_id === authStore.user?.id
     ? conversation.user_two
     : conversation.user_one
-}
-
-function initials(name: string) {
-  return name
-    .split(' ')
-    .filter(Boolean)
-    .map((part) => part[0])
-    .join('')
-    .slice(0, 2)
-    .toUpperCase()
 }
 
 function otherName(conversation: Conversation) {
