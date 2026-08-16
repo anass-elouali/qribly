@@ -50,6 +50,10 @@ class OfferResource extends JsonResource
             'distance' => isset($this->distance)
                 ? round($this->distance, 2)
                 : null,
+
+            'semantic_score' => isset($this->semantic_score)
+                ? round($this->semantic_score, 4)
+                : null,
             
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,

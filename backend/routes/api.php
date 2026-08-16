@@ -21,6 +21,7 @@ Route::post('login', [AuthController::class, 'login']);
 
 Route::get('offers', [OfferController::class, 'index']);
 Route::get('offers/nearby', [OfferController::class, 'nearby']);
+Route::get('offers/smart-search', [OfferController::class, 'smartSearch']);
 Route::get('offers/{offer}', [OfferController::class, 'show']);
 
 // Public Review 
@@ -81,4 +82,3 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('user', [AuthController::class, 'user']);
     Route::post('logout', [AuthController::class, 'logout']);
 });
-

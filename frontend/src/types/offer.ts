@@ -16,6 +16,7 @@ export interface Offer {
   owner?: { id: number; name: string }
   images?: { id: number; url: string }[]
   distance: number | null
+  semantic_score?: number | null
   created_at: string
   updated_at: string
 }

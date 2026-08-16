@@ -1,8 +1,13 @@
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import api from '@/services/api'
 import { fetchCategories } from '@/services/categories'
+import {
+  LocationUnavailableError,
+  smartSearchOffers,
+  type SmartSearchMeta,
+} from '@/services/smartSearch'
 import OfferCard from '@/components/offers/OfferCard.vue'
 import type { Category, Offer, PaginatedResponse } from '@/types/offer'
 
@@ -25,6 +30,16 @@ const lastPage = ref(1)
 
 const loading = ref(false)
 const error = ref('')
+const searchNotice = ref('')
+const smartSearchMeta = ref<SmartSearchMeta | null>(null)
+
+const isAssistantSearch = computed(
+  () => route.query.ai === '1' && searchQuery.value.trim().length >= 2,
+)
+
+const isSemanticSearch = computed(
+  () => isAssistantSearch.value && smartSearchMeta.value?.semantic_ranking === true,
+)
 
 const types = [
   {
@@ -51,26 +66,61 @@ const statuses = [
 async function loadOffers() {
   loading.value = true
   error.value = ''
+  searchNotice.value = ''
+  smartSearchMeta.value = null
 
   try {
-    const response = await api.get<PaginatedResponse<Offer>>('/offers', {
-      params: {
-        q: searchQuery.value || undefined,
-        category: selectedCategory.value ?? undefined,
-        type: selectedType.value ?? undefined,
-        status: selectedStatus.value ?? undefined,
-        min_price: minPrice.value ?? undefined,
-        max_price: maxPrice.value ?? undefined,
-        page: page.value,
-      },
-    })
+    if (isAssistantSearch.value) {
+      await loadSmartOffers()
+    } else {
+      await loadClassicOffers()
+    }
+  } catch (exception) {
+    if (isAssistantSearch.value) {
+      searchNotice.value = exception instanceof LocationUnavailableError
+        ? 'Autorise ta position pour que Qrib puisse chercher autour de toi. Résultats classiques affichés.'
+        : 'Qrib est momentanément indisponible. Résultats classiques affichés.'
 
-    offers.value = response.data.data
-    lastPage.value = response.data.meta.last_page
-  } catch {
-    error.value = 'Impossible de charger les annonces.'
+      try {
+        await loadClassicOffers()
+      } catch {
+        error.value = 'Impossible de charger les annonces.'
+      }
+    } else {
+      error.value = 'Impossible de charger les annonces.'
+    }
   } finally {
     loading.value = false
+  }
+}
+
+async function loadClassicOffers() {
+  const response = await api.get<PaginatedResponse<Offer>>('/offers', {
+    params: {
+      q: searchQuery.value || undefined,
+      category: selectedCategory.value ?? undefined,
+      type: selectedType.value ?? undefined,
+      status: selectedStatus.value ?? undefined,
+      min_price: minPrice.value ?? undefined,
+      max_price: maxPrice.value ?? undefined,
+      page: page.value,
+    },
+  })
+
+  offers.value = response.data.data
+  lastPage.value = response.data.meta.last_page
+}
+
+async function loadSmartOffers() {
+  const response = await smartSearchOffers(searchQuery.value.trim())
+
+  offers.value = response.data
+  lastPage.value = 1
+  page.value = 1
+  smartSearchMeta.value = response.meta
+
+  if (!response.meta.semantic_ranking) {
+    searchNotice.value = 'Qrib affiche les offres les plus proches de toi.'
   }
 }
 
@@ -450,11 +500,15 @@ onMounted(async () => {
 
           <div>
             <h2 class="font-display text-xl font-semibold text-ink">
-              Résultats
+              {{ isSemanticSearch ? 'Résultats pertinents près de vous' : 'Résultats' }}
             </h2>
 
             <p class="mt-1 text-sm text-ink/50">
-              <span v-if="searchQuery">
+              <span v-if="isSemanticSearch">
+                Qrib a classé {{ smartSearchMeta?.candidate_count }} offres autour de vous.
+              </span>
+
+              <span v-else-if="searchQuery">
                 Résultats pour « {{ searchQuery }} »
               </span>
 
@@ -472,6 +526,13 @@ onMounted(async () => {
           </span>
 
         </div>
+
+        <p
+          v-if="searchNotice && !error"
+          class="mb-5 rounded-lg bg-primary/10 px-4 py-3 text-sm text-primary"
+        >
+          {{ searchNotice }}
+        </p>
 
         <!-- Error -->
         <p

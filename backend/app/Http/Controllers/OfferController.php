@@ -10,6 +10,8 @@ use App\Models\Offer;
 use Illuminate\Support\Facades\DB;
 use App\Http\Requests\NearbyOfferRequest;
 use App\Http\Requests\OfferIndexRequest;
+use App\Http\Requests\SmartSearchOfferRequest;
+use App\Services\SemanticOfferRankingService;
 use Illuminate\Support\Facades\Storage;
 
 class OfferController extends Controller
@@ -204,6 +206,43 @@ class OfferController extends Controller
             ->paginate(10);
 
         return OfferResource::collection($offers);
+    }
+
+    public function smartSearch(
+        SmartSearchOfferRequest $request,
+        SemanticOfferRankingService $semanticOfferRanking,
+    ) {
+        $filters = $request->validated();
+        $radius = $filters['radius'] * 1000;
+        $point = 'ST_SetSRID(ST_MakePoint(?, ?), 4326)::geography';
+
+        // PostGIS narrows the search to nearby offers before any AI request.
+        // This keeps the response fast and avoids sending the whole marketplace
+        // to the semantic-search service.
+        $offers = Offer::withLocationCoordinates()
+            ->with(['category', 'user', 'offerImages'])
+            ->selectRaw(
+                "ST_Distance(location, $point) AS distance",
+                [$filters['longitude'], $filters['latitude']]
+            )
+            ->where('status', 'active')
+            ->whereRaw(
+                "ST_DWithin(location, $point, ?)",
+                [$filters['longitude'], $filters['latitude'], $radius]
+            )
+            ->orderBy('distance')
+            ->limit(50)
+            ->get();
+
+        $rankedOffers = $semanticOfferRanking->rank($filters['query'], $offers);
+
+        return OfferResource::collection(($rankedOffers ?? $offers)->take($filters['limit'] ?? 10))
+            ->additional([
+                'meta' => [
+                    'semantic_ranking' => $offers->isNotEmpty() && $rankedOffers !== null,
+                    'candidate_count' => $offers->count(),
+                ],
+            ]);
     }
     
 }

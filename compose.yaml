@@ -92,6 +92,25 @@ services:
       postgres:
         condition: service_healthy
 
+  ai-service:
+    build:
+      context: ./ai-service
+      dockerfile: Dockerfile
+
+    container_name: Qribly-ai
+    restart: unless-stopped
+
+    working_dir: /app
+
+    volumes:
+      - ./ai-service:/app
+      - ai_model_cache:/root/.cache/huggingface
+
+    ports:
+      - "8001:8000"
+
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
   frontend:
     build:
       context: ./frontend
@@ -125,3 +144,4 @@ services:
 
 volumes:
   postgres_data:
+  ai_model_cache:

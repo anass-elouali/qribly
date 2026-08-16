@@ -35,4 +35,10 @@ return [
         ],
     ],
 
+    'ai' => [
+        // Docker service name in development. Override this for another environment.
+        'url' => env('AI_SERVICE_URL', 'http://ai-service:8000'),
+        'timeout' => env('AI_SERVICE_TIMEOUT', 30),
+    ],
+
 ];
