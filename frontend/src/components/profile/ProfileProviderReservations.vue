@@ -2,7 +2,16 @@
 import { computed, ref } from 'vue'
 
 import ProviderReservationCard from '@/components/reservations/ProviderReservationCard.vue'
+import ReservationDetailsModal from '@/components/reservations/ReservationDetailsModal.vue'
+
 import type { Reservation } from '@/types/reservation'
+
+import { useRouter } from 'vue-router'
+import api from '@/services/api'
+import { useChatStore } from '@/stores/chat'
+
+const router = useRouter()
+const chatStore = useChatStore()
 
 const props = defineProps<{
   reservations: Reservation[]
@@ -12,7 +21,6 @@ const emit = defineEmits<{
   confirm: [id: number]
   cancel: [id: number]
   complete: [id: number]
-  view: [reservation: Reservation]
 }>()
 
 type ProviderFilter =
@@ -35,6 +43,12 @@ const providerFilters: {
   { key: 'cancelled', label: 'Annulées' },
 ]
 
+/*
+|--------------------------------------------------------------------------
+| Statistics
+|--------------------------------------------------------------------------
+*/
+
 const providerStats = computed(() => ({
   total: props.reservations.length,
 
@@ -55,6 +69,12 @@ const providerStats = computed(() => ({
   ).length,
 }))
 
+/*
+|--------------------------------------------------------------------------
+| Filtering
+|--------------------------------------------------------------------------
+*/
+
 const filteredReservations = computed(() => {
   if (providerFilter.value === 'all') {
     return props.reservations
@@ -64,11 +84,83 @@ const filteredReservations = computed(() => {
     (reservation) => reservation.status === providerFilter.value,
   )
 })
+
+/*
+|--------------------------------------------------------------------------
+| Reservation details modal
+|--------------------------------------------------------------------------
+*/
+
+const selectedReservation = ref<Reservation | null>(null)
+
+function viewReservation(reservation: Reservation) {
+  selectedReservation.value = reservation
+}
+
+function closeReservationDetails() {
+  selectedReservation.value = null
+}
+
+/*
+|--------------------------------------------------------------------------
+| Reservation actions
+|--------------------------------------------------------------------------
+|
+| We close the modal after an action because the parent ProfileView
+| will update the reservation status.
+|--------------------------------------------------------------------------
+*/
+
+function confirmReservation(id: number) {
+  emit('confirm', id)
+  selectedReservation.value = null
+}
+
+function cancelReservation(id: number) {
+  emit('cancel', id)
+  selectedReservation.value = null
+}
+
+function completeReservation(id: number) {
+  emit('complete', id)
+  selectedReservation.value = null
+}
+
+
+async function messageCustomer(userId: number) {
+  if (!userId) {
+    return
+  }
+
+  try {
+    const response = await api.post('/conversations', {
+      user_id: userId,
+    })
+
+    const conversation = response.data
+
+    chatStore.upsertConversation(conversation)
+
+    selectedReservation.value = null
+
+    await router.push({
+      name: 'conversation',
+      params: {
+        id: conversation.id,
+      },
+    })
+  } catch (error) {
+    console.error('Failed to open conversation:', error)
+  }
+}
 </script>
 
 <template>
   <section>
-    <!-- Header -->
+    <!-- ========================================================= -->
+    <!-- HEADER                                                    -->
+    <!-- ========================================================= -->
+
     <div
       class="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"
     >
@@ -89,8 +181,12 @@ const filteredReservations = computed(() => {
       </div>
     </div>
 
-    <!-- Statistics -->
+    <!-- ========================================================= -->
+    <!-- STATISTICS                                                -->
+    <!-- ========================================================= -->
+
     <div class="mb-7 grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <!-- Total -->
       <div class="rounded-lg border border-ink/10 bg-surface p-4">
         <p
           class="font-mono text-[0.65rem] tracking-wide text-ink/40 uppercase"
@@ -103,6 +199,7 @@ const filteredReservations = computed(() => {
         </p>
       </div>
 
+      <!-- Pending -->
       <div class="rounded-lg border border-ink/10 bg-surface p-4">
         <p
           class="font-mono text-[0.65rem] tracking-wide text-ink/40 uppercase"
@@ -115,6 +212,7 @@ const filteredReservations = computed(() => {
         </p>
       </div>
 
+      <!-- Confirmed -->
       <div class="rounded-lg border border-ink/10 bg-surface p-4">
         <p
           class="font-mono text-[0.65rem] tracking-wide text-ink/40 uppercase"
@@ -127,6 +225,7 @@ const filteredReservations = computed(() => {
         </p>
       </div>
 
+      <!-- Completed -->
       <div class="rounded-lg border border-ink/10 bg-surface p-4">
         <p
           class="font-mono text-[0.65rem] tracking-wide text-ink/40 uppercase"
@@ -140,7 +239,10 @@ const filteredReservations = computed(() => {
       </div>
     </div>
 
-    <!-- Filters -->
+    <!-- ========================================================= -->
+    <!-- FILTERS                                                   -->
+    <!-- ========================================================= -->
+
     <div class="mb-6 flex flex-wrap gap-2">
       <button
         v-for="filter in providerFilters"
@@ -158,8 +260,12 @@ const filteredReservations = computed(() => {
       </button>
     </div>
 
-    <!-- Reservations -->
+    <!-- ========================================================= -->
+    <!-- RESERVATIONS                                              -->
+    <!-- ========================================================= -->
+
     <div class="flex flex-col gap-4">
+      <!-- Empty state -->
       <div
         v-if="filteredReservations.length === 0"
         class="rounded-xl border border-dashed border-ink/15 px-6 py-16 text-center"
@@ -173,15 +279,30 @@ const filteredReservations = computed(() => {
         </p>
       </div>
 
+      <!-- Reservation cards -->
       <ProviderReservationCard
         v-for="reservation in filteredReservations"
         :key="reservation.id"
         :reservation="reservation"
-        @view="emit('view', $event)"
-        @confirm="emit('confirm', $event)"
-        @cancel="emit('cancel', $event)"
-        @complete="emit('complete', $event)"
+        @view="viewReservation"
+        @confirm="confirmReservation"
+        @cancel="cancelReservation"
+        @complete="completeReservation"
       />
     </div>
+
+    <!-- ========================================================= -->
+    <!-- RESERVATION DETAILS MODAL                                 -->
+    <!-- ========================================================= -->
+
+    <ReservationDetailsModal
+      v-if="selectedReservation"
+      :reservation="selectedReservation"
+      @close="closeReservationDetails"
+      @message="messageCustomer"
+      @confirm="confirmReservation"
+      @cancel="cancelReservation"
+      @complete="completeReservation"
+    />
   </section>
 </template>

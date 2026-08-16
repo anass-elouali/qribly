@@ -57,7 +57,7 @@ class OfferController extends Controller
             $query->where('user_id', $request->user('sanctum')?->id);
         });
 
-        $offers = $query->latest()->paginate(15);
+        $offers = $query->latest()->paginate(9);
         
 
         return OfferResource::collection($offers);

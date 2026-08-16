@@ -1,16 +1,26 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  ref,
+  watch,
+} from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import dayjs from 'dayjs'
+
 import api from '@/services/api'
 import echo from '@/echo'
 import { useAuthStore } from '@/stores/auth'
 import { useChatStore } from '@/stores/chat'
+
 import type { Conversation, Message } from '@/types/conversation'
 import type { PaginatedResponse } from '@/types/offer'
 
 const route = useRoute()
 const router = useRouter()
+
 const authStore = useAuthStore()
 const chatStore = useChatStore()
 
@@ -20,19 +30,30 @@ const sending = ref(false)
 const newMessage = ref('')
 const threadBody = ref<HTMLElement | null>(null)
 
-const activeId = computed(() => (route.params.id ? Number(route.params.id) : null))
-
-const activeConversation = computed<Conversation | undefined>(() =>
-  chatStore.conversations.find((c) => c.id === activeId.value),
+const activeId = computed(() =>
+  route.params.id ? Number(route.params.id) : null,
 )
 
+const activeConversation = computed<Conversation | undefined>(() =>
+  chatStore.conversations.find((conversation) => conversation.id === activeId.value),
+)
+
+/*
+|--------------------------------------------------------------------------
+| Participants
+|--------------------------------------------------------------------------
+*/
+
 function otherParticipant(conversation: Conversation) {
-  return conversation.user_one_id === authStore.user?.id ? conversation.user_two : conversation.user_one
+  return conversation.user_one_id === authStore.user?.id
+    ? conversation.user_two
+    : conversation.user_one
 }
 
 function initials(name: string) {
   return name
     .split(' ')
+    .filter(Boolean)
     .map((part) => part[0])
     .join('')
     .slice(0, 2)
@@ -45,8 +66,15 @@ function otherName(conversation: Conversation) {
 
 function otherInitials(conversation: Conversation) {
   const participant = otherParticipant(conversation)
+
   return participant ? initials(participant.name) : '?'
 }
+
+/*
+|--------------------------------------------------------------------------
+| Messages
+|--------------------------------------------------------------------------
+*/
 
 function scrollToBottom() {
   nextTick(() => {
@@ -59,14 +87,22 @@ function scrollToBottom() {
 async function markMessageRead(message: Message) {
   try {
     await api.patch(`/messages/${message.id}/read`)
+
     message.read_at = new Date().toISOString()
+
     if (activeId.value) {
       chatStore.markRead(activeId.value)
     }
   } catch {
-    // Non-bloquant — le statut lu est un plus, pas critique.
+    // Non-blocking.
   }
 }
+
+/*
+|--------------------------------------------------------------------------
+| Realtime
+|--------------------------------------------------------------------------
+*/
 
 let subscribedChannel: string | null = null
 
@@ -79,59 +115,82 @@ function unsubscribe() {
 
 function subscribe(conversationId: number) {
   unsubscribe()
+
   subscribedChannel = `conversation.${conversationId}`
 
-  echo.private(subscribedChannel).listen('MessageSent', (event: { message: Message }) => {
-    const message = event.message
+  echo
+    .private(subscribedChannel)
+    .listen('MessageSent', (event: { message: Message }) => {
+      const message = event.message
 
-    if (messages.value.some((m) => m.id === message.id)) {
-      return
-    }
+      if (messages.value.some((item) => item.id === message.id)) {
+        return
+      }
 
-    messages.value.push(message)
-    chatStore.upsertFromMessage(conversationId, message)
-    scrollToBottom()
+      messages.value.push(message)
 
-    if (message.sender_id !== authStore.user?.id) {
-      markMessageRead(message)
-    }
-  })
+      chatStore.upsertFromMessage(conversationId, message)
+
+      scrollToBottom()
+
+      if (message.sender_id !== authStore.user?.id) {
+        markMessageRead(message)
+      }
+    })
 }
+
+/*
+|--------------------------------------------------------------------------
+| Load conversation
+|--------------------------------------------------------------------------
+*/
 
 async function loadThread(conversationId: number) {
   loadingMessages.value = true
   messages.value = []
 
-  // Subscribe before fetching history so no message sent by the other party
-  // during the (potentially slow) history fetch is missed.
   subscribe(conversationId)
 
   try {
-    const response = await api.get<PaginatedResponse<Message>>(`/conversations/${conversationId}/messages`)
+    const response = await api.get<PaginatedResponse<Message>>(
+      `/conversations/${conversationId}/messages`,
+    )
+
     const history = [...response.data.data].reverse()
 
     for (const historyMessage of history) {
-      if (!messages.value.some((m) => m.id === historyMessage.id)) {
+      if (!messages.value.some((message) => message.id === historyMessage.id)) {
         messages.value.push(historyMessage)
       }
     }
-    // A message can arrive live (pushed by the listener) while this request is
-    // still in flight — re-sort by id (chronological) so it lands in place
-    // instead of staying wherever it happened to be pushed.
+
     messages.value.sort((a, b) => a.id - b.id)
+
     scrollToBottom()
 
-    const unread = messages.value.filter((m) => m.sender_id !== authStore.user?.id && !m.read_at)
-    await Promise.all(unread.map((m) => markMessageRead(m)))
+    const unread = messages.value.filter(
+      (message) =>
+        message.sender_id !== authStore.user?.id &&
+        !message.read_at,
+    )
+
+    await Promise.all(unread.map((message) => markMessageRead(message)))
   } catch {
-    // Keep whatever arrived live even if the history fetch itself failed.
+    // Keep live messages if history fails.
   } finally {
     loadingMessages.value = false
   }
 }
 
+/*
+|--------------------------------------------------------------------------
+| Send message
+|--------------------------------------------------------------------------
+*/
+
 async function sendMessage() {
   const body = newMessage.value.trim()
+
   if (!body || !activeId.value) {
     return
   }
@@ -139,29 +198,56 @@ async function sendMessage() {
   sending.value = true
 
   try {
-    const response = await api.post<Message>(`/conversations/${activeId.value}/messages`, { body })
+    const response = await api.post<Message>(
+      `/conversations/${activeId.value}/messages`,
+      { body },
+    )
+
     const message = response.data
 
-    if (!messages.value.some((m) => m.id === message.id)) {
+    if (!messages.value.some((item) => item.id === message.id)) {
       messages.value.push(message)
       scrollToBottom()
     }
 
     chatStore.upsertFromMessage(activeId.value, message)
+
     newMessage.value = ''
   } catch {
-    // On garde le brouillon pour permettre de réessayer.
+    // Keep draft.
   } finally {
     sending.value = false
   }
 }
 
+/*
+|--------------------------------------------------------------------------
+| Navigation
+|--------------------------------------------------------------------------
+*/
+
 function openConversation(id: number) {
-  router.push({ name: 'conversation', params: { id } })
+  router.push({
+    name: 'conversation',
+    params: { id },
+  })
 }
+
+function closeConversation() {
+  router.push({
+    name: 'conversations',
+  })
+}
+
+/*
+|--------------------------------------------------------------------------
+| Lifecycle
+|--------------------------------------------------------------------------
+*/
 
 onMounted(async () => {
   await chatStore.load()
+
   if (activeId.value) {
     loadThread(activeId.value)
   }
@@ -180,121 +266,307 @@ onBeforeUnmount(unsubscribe)
 </script>
 
 <template>
-  <div class="mx-auto grid h-[calc(100vh-4rem)] max-w-6xl grid-cols-1 md:grid-cols-[320px_1fr]">
-    <aside class="min-h-0 flex-col border-ink/10 md:flex md:border-r" :class="activeId ? 'hidden' : 'flex'">
-      <div class="px-6 py-5">
-        <h1 class="font-display text-xl font-bold text-ink">Messages</h1>
+  <div
+    class="mx-auto flex h-[calc(100vh-4rem)] max-w-6xl overflow-hidden border-x border-ink/10 bg-ground"
+  >
+    <!-- ========================================================= -->
+    <!-- CONVERSATIONS SIDEBAR                                     -->
+    <!-- ========================================================= -->
+
+    <aside
+      class="w-full shrink-0 flex-col bg-surface md:flex md:w-[320px] md:border-r md:border-ink/10"
+      :class="activeId ? 'hidden' : 'flex'"
+    >
+      <!-- Sidebar header -->
+      <div class="border-b border-ink/10 px-5 py-5">
+        <div class="flex items-center justify-between">
+          <div>
+            <p
+              class="font-mono text-[0.6rem] tracking-[0.2em] text-primary uppercase"
+            >
+              Communication
+            </p>
+
+            <h1 class="mt-1 font-display text-2xl font-bold text-ink">
+              Messages
+            </h1>
+          </div>
+
+          <span
+            v-if="chatStore.unreadCount"
+            class="flex h-6 min-w-6 items-center justify-center rounded-full bg-primary px-1.5 font-mono text-[0.65rem] font-bold text-surface"
+          >
+            {{ chatStore.unreadCount }}
+          </span>
+        </div>
       </div>
 
-      <p v-if="chatStore.conversations.length === 0" class="px-6 font-mono text-sm text-ink/50">
-        Aucune conversation pour le moment.
-      </p>
-
-      <ul v-else class="flex-1 overflow-y-auto px-2 pb-4">
-        <li v-for="conversation in chatStore.conversations" :key="conversation.id">
-          <button
-            type="button"
-            class="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left transition-colors hover:bg-ink/5"
-            :class="conversation.id === activeId ? 'bg-ground' : ''"
-            @click="openConversation(conversation.id)"
-          >
-            <span
-              class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary font-mono text-xs font-bold text-surface"
+      <!-- Conversation list -->
+      <div class="min-h-0 flex-1 overflow-y-auto">
+        <!-- Empty -->
+        <div
+          v-if="chatStore.conversations.length === 0"
+          class="flex h-full items-center justify-center px-8 text-center"
+        >
+          <div>
+            <div
+              class="mx-auto flex h-12 w-12 items-center justify-center rounded-full border border-ink/10 bg-ground"
             >
-              {{ otherInitials(conversation) }}
-            </span>
+              <span class="h-2 w-2 rounded-full bg-primary" />
+            </div>
 
-            <span class="min-w-0 flex-1">
-              <span
-                class="block truncate font-body text-sm text-ink"
-                :class="chatStore.isUnread(conversation) ? 'font-bold' : 'font-semibold'"
-              >
-                {{ otherName(conversation) }}
-              </span>
-              <span
-                class="block truncate font-body text-sm"
-                :class="chatStore.isUnread(conversation) ? 'text-ink' : 'text-ink/60'"
-              >
-                {{ conversation.messages?.[0]?.body ?? '' }}
-              </span>
-            </span>
+            <p class="mt-4 font-display font-semibold text-ink">
+              Aucune conversation
+            </p>
 
-            <span class="flex shrink-0 flex-col items-end gap-1">
-              <span class="font-mono text-[0.65rem] text-ink/40">
-                {{ conversation.messages?.[0] ? dayjs(conversation.messages[0].created_at).fromNow() : '' }}
+            <p class="mt-1 font-body text-sm leading-relaxed text-ink/45">
+              Vos conversations avec les autres utilisateurs apparaîtront ici.
+            </p>
+          </div>
+        </div>
+
+        <!-- Conversations -->
+        <ul v-else class="space-y-1 p-2">
+          <li
+            v-for="conversation in chatStore.conversations"
+            :key="conversation.id"
+          >
+            <button
+              type="button"
+              class="group flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition"
+              :class="
+                conversation.id === activeId
+                  ? 'bg-primary/[0.08]'
+                  : 'hover:bg-ink/[0.04]'
+              "
+              @click="openConversation(conversation.id)"
+            >
+              <!-- Avatar -->
+              <span
+                class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full font-mono text-xs font-bold transition"
+                :class="
+                  conversation.id === activeId
+                    ? 'bg-primary text-surface'
+                    : 'bg-ground text-ink/65 group-hover:bg-primary/10 group-hover:text-primary'
+                "
+              >
+                {{ otherInitials(conversation) }}
               </span>
-              <span v-if="chatStore.isUnread(conversation)" class="h-2 w-2 rounded-full bg-accent"></span>
-            </span>
-          </button>
-        </li>
-      </ul>
+
+              <!-- Content -->
+              <span class="min-w-0 flex-1">
+                <span
+                  class="block truncate font-body text-sm"
+                  :class="
+                    chatStore.isUnread(conversation)
+                      ? 'font-bold text-ink'
+                      : 'font-semibold text-ink'
+                  "
+                >
+                  {{ otherName(conversation) }}
+                </span>
+
+                <span
+                  class="mt-0.5 block truncate font-body text-xs"
+                  :class="
+                    chatStore.isUnread(conversation)
+                      ? 'font-medium text-ink/80'
+                      : 'text-ink/45'
+                  "
+                >
+                  {{ conversation.messages?.[0]?.body ?? 'Nouvelle conversation' }}
+                </span>
+              </span>
+
+              <!-- Meta -->
+              <span class="flex shrink-0 flex-col items-end gap-1.5">
+                <span class="font-mono text-[0.6rem] text-ink/35">
+                  {{
+                    conversation.messages?.[0]
+                      ? dayjs(conversation.messages[0].created_at).fromNow()
+                      : ''
+                  }}
+                </span>
+
+                <span
+                  v-if="chatStore.isUnread(conversation)"
+                  class="h-1.5 w-1.5 rounded-full bg-accent"
+                />
+              </span>
+            </button>
+          </li>
+        </ul>
+      </div>
     </aside>
 
-    <section class="min-h-0 flex-col md:flex" :class="activeId ? 'flex' : 'hidden'">
+    <!-- ========================================================= -->
+    <!-- CHAT THREAD                                               -->
+    <!-- ========================================================= -->
+
+    <section
+      class="min-w-0 flex-1 flex-col bg-ground"
+      :class="activeId ? 'flex' : 'hidden md:flex'"
+    >
       <template v-if="activeConversation">
-        <div class="flex items-center gap-3 border-b border-ink/10 px-6 py-4">
+        <!-- Chat header -->
+        <header
+          class="flex shrink-0 items-center gap-3 border-b border-ink/10 bg-surface px-4 py-4 sm:px-6"
+        >
           <button
             type="button"
-            class="mr-1 text-ink/60 transition-colors hover:text-primary md:hidden"
-            aria-label="Retour"
-            @click="router.push({ name: 'conversations' })"
+            class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-ink/50 transition hover:bg-ink/5 hover:text-ink md:hidden"
+            aria-label="Retour aux conversations"
+            @click="closeConversation"
           >
-            ←
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              class="h-5 w-5"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                d="M15 18l-6-6 6-6"
+              />
+            </svg>
           </button>
+
           <span
-            class="flex h-10 w-10 items-center justify-center rounded-full bg-primary font-mono text-xs font-bold text-surface"
+            class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary font-mono text-xs font-bold text-surface"
           >
             {{ otherInitials(activeConversation) }}
           </span>
-          <p class="font-body font-semibold text-ink">{{ otherName(activeConversation) }}</p>
-        </div>
 
-        <div ref="threadBody" class="flex-1 overflow-y-auto px-6 py-5">
-          <p v-if="loadingMessages" class="font-mono text-sm text-ink/50">Chargement…</p>
+          <div class="min-w-0">
+            <p class="truncate font-body font-semibold text-ink">
+              {{ otherName(activeConversation) }}
+            </p>
 
-          <div v-else class="flex flex-col gap-3">
+            <p class="font-mono text-[0.6rem] tracking-wide text-ink/35 uppercase">
+              Conversation
+            </p>
+          </div>
+        </header>
+
+        <!-- Messages -->
+        <div
+          ref="threadBody"
+          class="min-h-0 flex-1 overflow-y-auto px-4 py-6 sm:px-6"
+        >
+          <!-- Loading -->
+          <div
+            v-if="loadingMessages"
+            class="flex h-full items-center justify-center"
+          >
+            <p class="font-mono text-xs tracking-wide text-ink/40 uppercase">
+              Chargement…
+            </p>
+          </div>
+
+          <!-- Empty thread -->
+          <div
+            v-else-if="messages.length === 0"
+            class="flex h-full items-center justify-center"
+          >
+            <div class="max-w-xs text-center">
+              <div
+                class="mx-auto flex h-12 w-12 items-center justify-center rounded-full border border-ink/10 bg-surface"
+              >
+                <span class="h-2 w-2 rounded-full bg-primary" />
+              </div>
+
+              <p class="mt-4 font-display font-semibold text-ink">
+                Commencez la conversation
+              </p>
+
+              <p class="mt-1 font-body text-sm leading-relaxed text-ink/45">
+                Envoyez un message pour commencer à échanger.
+              </p>
+            </div>
+          </div>
+
+          <!-- Message list -->
+          <div
+            v-else
+            class="mx-auto flex w-full max-w-3xl flex-col gap-4"
+          >
             <div
               v-for="message in messages"
               :key="message.id"
-              class="flex max-w-[65%] flex-col"
-              :class="message.sender_id === authStore.user?.id ? 'ml-auto items-end' : 'items-start'"
+              class="flex max-w-[80%] flex-col sm:max-w-[70%]"
+              :class="
+                message.sender_id === authStore.user?.id
+                  ? 'ml-auto items-end'
+                  : 'items-start'
+              "
             >
-              <p
-                class="rounded-2xl px-4 py-2 text-sm"
+              <div
+                class="px-4 py-2.5 text-sm leading-relaxed"
                 :class="
                   message.sender_id === authStore.user?.id
-                    ? 'rounded-br-md bg-primary text-surface'
-                    : 'rounded-bl-md border border-ink/10 bg-ground text-ink'
+                    ? 'rounded-2xl rounded-br-md bg-primary text-surface'
+                    : 'rounded-2xl rounded-bl-md border border-ink/10 bg-surface text-ink'
                 "
               >
                 {{ message.body }}
-              </p>
-              <span class="mt-1 px-1 font-mono text-[0.65rem] text-ink/40">
+              </div>
+
+              <span
+                class="mt-1.5 px-1 font-mono text-[0.6rem] text-ink/30"
+              >
                 {{ dayjs(message.created_at).format('HH:mm') }}
               </span>
             </div>
           </div>
         </div>
 
-        <form class="flex gap-2 border-t border-ink/10 px-6 py-4" @submit.prevent="sendMessage">
-          <input
-            v-model="newMessage"
-            type="text"
-            placeholder="Écrire un message…"
-            class="flex-1 rounded-lg border border-ink/15 bg-ground px-3 py-2 font-body outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
-          />
-          <button
-            type="submit"
-            :disabled="sending || !newMessage.trim()"
-            class="rounded-lg bg-accent px-4 py-2 font-semibold text-ink transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+        <!-- Composer -->
+        <div class="shrink-0 border-t border-ink/10 bg-surface px-4 py-4 sm:px-6">
+          <form
+            class="mx-auto flex max-w-3xl items-end gap-2"
+            @submit.prevent="sendMessage"
           >
-            Envoyer
-          </button>
-        </form>
+            <input
+              v-model="newMessage"
+              type="text"
+              autocomplete="off"
+              placeholder="Écrire un message…"
+              class="min-w-0 flex-1 rounded-xl border border-ink/10 bg-ground px-4 py-3 font-body text-sm text-ink outline-none transition placeholder:text-ink/35 focus:border-primary focus:ring-2 focus:ring-primary/10"
+            />
+
+            <button
+              type="submit"
+              :disabled="sending || !newMessage.trim()"
+              class="flex h-11 shrink-0 items-center justify-center rounded-xl bg-primary px-5 font-body text-sm font-semibold text-surface transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {{ sending ? '…' : 'Envoyer' }}
+            </button>
+          </form>
+        </div>
       </template>
 
-      <div v-else class="flex flex-1 items-center justify-center px-6 text-center">
-        <p class="font-mono text-sm text-ink/50">Sélectionne une conversation pour commencer à discuter.</p>
+      <!-- No active conversation -->
+      <div
+        v-else
+        class="flex flex-1 items-center justify-center px-6 text-center"
+      >
+        <div class="max-w-sm">
+          <div
+            class="mx-auto flex h-14 w-14 items-center justify-center rounded-full border border-ink/10 bg-surface"
+          >
+            <span class="h-2 w-2 rounded-full bg-primary" />
+          </div>
+
+          <h2 class="mt-5 font-display text-xl font-bold text-ink">
+            Vos messages
+          </h2>
+
+          <p class="mt-2 font-body text-sm leading-relaxed text-ink/45">
+            Sélectionnez une conversation pour afficher vos messages.
+          </p>
+        </div>
       </div>
     </section>
   </div>
