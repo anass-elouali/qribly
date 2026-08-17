@@ -77,4 +77,107 @@ class ReservationTest extends TestCase
         $this->assertNotNull($reservation);
         $this->assertSame('pending', $reservation->status);
     }
+    public function test_provider_can_confirm_a_pending_reservation(): void
+    {
+        $customer = User::factory()->create();
+        $provider = User::factory()->create();
+
+        $offer = $this->createOffer($provider);
+
+        $reservation = Reservation::create([
+            'user_id' => $customer->id,
+            'offer_id' => $offer->id,
+            'scheduled_at' => now()->addDay(),
+            'status' => 'pending',
+        ]);
+
+        $response = $this
+            ->actingAs($provider)
+            ->patchJson("/api/provider/reservations/{$reservation->id}/confirm");
+
+        $response->assertSuccessful();
+
+        $this->assertDatabaseHas('reservations', [
+            'id' => $reservation->id,
+            'status' => 'confirmed',
+        ]);
+    }
+    public function test_provider_can_cancel_a_pending_reservation(): void
+    {
+        $customer = User::factory()->create();
+        $provider = User::factory()->create();
+
+        $offer = $this->createOffer($provider);
+
+        $reservation = Reservation::create([
+            'user_id' => $customer->id,
+            'offer_id' => $offer->id,
+            'scheduled_at' => now()->addDay(),
+            'status' => 'pending',
+        ]);
+
+        $response = $this
+            ->actingAs($provider)
+            ->patchJson("/api/provider/reservations/{$reservation->id}/cancel");
+
+        $response->assertSuccessful();
+
+        $this->assertDatabaseHas('reservations', [
+            'id' => $reservation->id,
+            'status' => 'cancelled',
+            'cancelled_by' => $provider->id,
+        ]);
+    }
+    public function test_provider_can_complete_a_confirmed_reservation(): void
+    {
+        $customer = User::factory()->create();
+        $provider = User::factory()->create();
+
+        $offer = $this->createOffer($provider);
+
+        $reservation = Reservation::create([
+            'user_id' => $customer->id,
+            'offer_id' => $offer->id,
+            'scheduled_at' => now()->addDay(),
+            'status' => 'confirmed',
+        ]);
+
+        $response = $this
+            ->actingAs($provider)
+            ->patchJson("/api/provider/reservations/{$reservation->id}/complete");
+
+        $response->assertSuccessful();
+
+        $this->assertDatabaseHas('reservations', [
+            'id' => $reservation->id,
+            'status' => 'completed',
+        ]);
+    }
+    public function test_other_provider_cannot_confirm_a_reservation(): void
+    {
+        $customer = User::factory()->create();
+        $provider = User::factory()->create();
+        $otherProvider = User::factory()->create();
+
+        $offer = $this->createOffer($provider);
+
+        $reservation = Reservation::create([
+            'user_id' => $customer->id,
+            'offer_id' => $offer->id,
+            'scheduled_at' => now()->addDay(),
+            'status' => 'pending',
+        ]);
+
+        $response = $this
+            ->actingAs($otherProvider)
+            ->patchJson("/api/provider/reservations/{$reservation->id}/confirm");
+
+        $response->assertForbidden();
+
+        $this->assertDatabaseHas('reservations', [
+            'id' => $reservation->id,
+            'status' => 'pending',
+        ]);
+    }
+ 
 }
