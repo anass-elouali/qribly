@@ -17,6 +17,7 @@ coverage
 # Env
 .env
 .env.*
+.env.prod
 !.env.example
 
 # Editor directories and files
