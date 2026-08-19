@@ -8,9 +8,7 @@ RUN npm ci
 
 COPY frontend/ ./
 
-ENV VITE_API_URL=/api
-
-RUN npm run build
+RUN npm run build-only -- --mode prod
 
 
 FROM nginx:alpine
