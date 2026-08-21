@@ -10,11 +10,12 @@ return new class extends Migration
      */
     public function up(): void
     {
-         DB::statement("
+        DB::statement('CREATE EXTENSION IF NOT EXISTS postgis');
+
+        DB::statement('
             ALTER TABLE offers
             ADD COLUMN location geography(Point, 4326)
-        ");
-    
+        ');
     }
 
     /**
@@ -22,9 +23,9 @@ return new class extends Migration
      */
     public function down(): void
     {
-        DB::statement("
+        DB::statement('
             ALTER TABLE offers
             DROP COLUMN location
-        ");
+        ');
     }
 };

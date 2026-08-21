@@ -34,6 +34,7 @@ services:
 
     volumes:
       - ./backend:/var/www
+      - backend_vendor:/var/www/vendor
 
     ports:
       - "8000:8000"
@@ -48,6 +49,13 @@ services:
       postgres:
         condition: service_healthy
 
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://localhost:8000/api/categories"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 180s
+
   reverb:
     build:
       context: ./backend
@@ -60,6 +68,7 @@ services:
 
     volumes:
       - ./backend:/var/www
+      - backend_vendor:/var/www/vendor
 
     ports:
       - "8080:8080"
@@ -69,6 +78,10 @@ services:
 
 
     command: php artisan reverb:start --host=0.0.0.0 --port=8080
+
+    depends_on:
+      backend:
+        condition: service_healthy
 
   queue:
     build:
@@ -82,6 +95,7 @@ services:
 
     volumes:
       - ./backend:/var/www
+      - backend_vendor:/var/www/vendor
 
     environment:
       APP_ROLE: queue
@@ -90,6 +104,8 @@ services:
 
     depends_on:
       postgres:
+        condition: service_healthy
+      backend:
         condition: service_healthy
 
   ai-service:
@@ -138,10 +154,12 @@ services:
       
 
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
 
     command: npm run dev -- --host
 
 volumes:
   postgres_data:
   ai_model_cache:
+  backend_vendor:
