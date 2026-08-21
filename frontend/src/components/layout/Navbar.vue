@@ -1,7 +1,17 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
-import { Heart, House, LogIn, LogOut, MapPin, MessageCircle, User } from 'lucide-vue-next'
+import {
+  Heart,
+  House,
+  LogIn,
+  LogOut,
+  MapPin,
+  MessageCircle,
+  Plus,
+  User,
+  UserPlus,
+} from 'lucide-vue-next'
 import { useAuthStore } from '@/stores/auth'
 import { useChatStore } from '@/stores/chat'
 import echo from '@/echo'
@@ -99,9 +109,9 @@ async function handleLogout() {
 
 <template>
   <header class="border-b border-ink/10 bg-surface">
-    <nav class="mx-auto flex h-16 max-w-7xl items-center justify-between px-6">
+    <nav class="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6">
       <RouterLink :to="{ name: 'home' }" class="flex items-center" aria-label="Qribly, accueil">
-        <QriblyLogo class="w-32" :animated="false" :show-tagline="false" />
+        <QriblyLogo class="w-28 sm:w-32" :animated="false" :show-tagline="false" />
       </RouterLink>
 
       <div class="flex items-center gap-1 font-body text-sm">
@@ -124,7 +134,7 @@ async function handleLogout() {
           active-class="link-active !text-primary !font-semibold"
         >
           <MapPin :size="20" />
-          Près de moi
+          <span class="hidden md:inline">Près de moi</span>
           <span
             class="pin-drop pointer-events-none absolute bottom-0.5 left-1/2 h-1.5 w-1.5 -translate-x-1/2 rotate-45 scale-0 rounded-[50%_50%_50%_0] bg-accent opacity-0 transition-all duration-300 ease-out group-[.link-active]:scale-100 group-[.link-active]:opacity-100"
           ></span>
@@ -152,9 +162,12 @@ async function handleLogout() {
 
           <RouterLink
             :to="{ name: 'offer-create' }"
-            class="ml-2 rounded-md bg-accent px-3.5 py-1.5 font-semibold text-ink transition-opacity hover:opacity-90"
+            class="ml-1 flex items-center rounded-md bg-accent px-2.5 py-1.5 font-semibold text-ink transition-opacity hover:opacity-90 sm:ml-2 sm:px-3.5"
+            aria-label="Publier une annonce"
+            title="Publier une annonce"
           >
-            Publier une annonce
+            <Plus :size="20" class="md:hidden" />
+            <span class="hidden md:inline">Publier une annonce</span>
           </RouterLink>
 
           <div v-if="authStore.user" ref="profileMenuRef" class="relative ml-2">
@@ -181,7 +194,9 @@ async function handleLogout() {
                   {{ initials(authStore.user.name) }}
                 </span>
                 <div class="min-w-0">
-                  <p class="truncate font-body text-sm font-semibold text-ink">{{ authStore.user.name }}</p>
+                  <p class="truncate font-body text-sm font-semibold text-ink">
+                    {{ authStore.user.name }}
+                  </p>
                   <p class="truncate font-mono text-xs text-ink/45">{{ authStore.user.email }}</p>
                 </div>
               </div>
@@ -234,9 +249,12 @@ async function handleLogout() {
 
           <RouterLink
             :to="{ name: 'register' }"
-            class="ml-2 rounded-md bg-accent px-3.5 py-1.5 font-semibold text-ink transition-opacity hover:opacity-90"
+            class="ml-1 flex items-center rounded-md bg-accent px-2.5 py-1.5 font-semibold text-ink transition-opacity hover:opacity-90 sm:ml-2 sm:px-3.5"
+            aria-label="Inscription"
+            title="Inscription"
           >
-            Inscription
+            <UserPlus :size="20" class="sm:hidden" />
+            <span class="hidden sm:inline">Inscription</span>
           </RouterLink>
         </template>
       </div>
