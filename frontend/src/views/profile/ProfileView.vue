@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute } from 'vue-router'
 
 import { useAuthStore } from '@/stores/auth'
 import { useFavoritesStore } from '@/stores/favorites'
 import api from '@/services/api'
+import { extractErrorMessage } from '@/utils/errors'
 
 import ProfileHeader from '@/components/profile/ProfileHeader.vue'
 import ProfileTabs from '@/components/profile/ProfileTabs.vue'
@@ -12,6 +13,8 @@ import ProfileOffers from '@/components/profile/ProfileOffers.vue'
 import ProfileFavorites from '@/components/profile/ProfileFavorites.vue'
 import ProfileReservations from '@/components/profile/ProfileReservations.vue'
 import ProfileProviderReservations from '@/components/profile/ProfileProviderReservations.vue'
+import OfferGridSkeleton from '@/components/offers/OfferGridSkeleton.vue'
+import AsyncStatePanel from '@/components/ui/AsyncStatePanel.vue'
 
 import type { Offer, PaginatedResponse } from '@/types/offer'
 import type { Reservation } from '@/types/reservation'
@@ -29,10 +32,9 @@ const tabs: { key: Tab; label: string }[] = [
   { key: 'provider', label: 'Réservations reçues' },
 ]
 
-const initialTab: Tab =
-  tabs.some((tab) => tab.key === route.query.tab)
-    ? (route.query.tab as Tab)
-    : 'offers'
+const initialTab: Tab = tabs.some((tab) => tab.key === route.query.tab)
+  ? (route.query.tab as Tab)
+  : 'offers'
 
 const activeTab = ref<Tab>(initialTab)
 
@@ -42,9 +44,10 @@ const reservations = ref<Reservation[]>([])
 const providerReservations = ref<Reservation[]>([])
 
 const loading = ref(false)
+const actionLoading = ref(false)
 const error = ref('')
 
-const loadedTabs = new Set<Tab>()
+const loadedTabs = reactive(new Set<Tab>())
 
 /*
 |--------------------------------------------------------------------------
@@ -70,24 +73,20 @@ async function fetchTabData(tab: Tab) {
   }
 
   if (tab === 'reservations') {
-    const response = await api.get<PaginatedResponse<Reservation>>(
-      '/reservations',
-    )
+    const response = await api.get<PaginatedResponse<Reservation>>('/reservations')
 
     reservations.value = response.data.data
   }
 
   if (tab === 'provider') {
-    const response = await api.get<PaginatedResponse<Reservation>>(
-      '/provider/reservations',
-    )
+    const response = await api.get<PaginatedResponse<Reservation>>('/provider/reservations')
 
     providerReservations.value = response.data.data
   }
 }
 
-async function loadTab(tab: Tab) {
-  if (loadedTabs.has(tab)) {
+async function loadTab(tab: Tab, force = false) {
+  if (loadedTabs.has(tab) && !force) {
     return
   }
 
@@ -97,8 +96,8 @@ async function loadTab(tab: Tab) {
   try {
     await fetchTabData(tab)
     loadedTabs.add(tab)
-  } catch {
-    error.value = 'Impossible de charger cette section.'
+  } catch (exception) {
+    error.value = extractErrorMessage(exception, 'Impossible de charger cette section.')
   } finally {
     loading.value = false
   }
@@ -109,9 +108,7 @@ async function loadTab(tab: Tab) {
 // showing 0 until the user happens to click each tab. Doesn't touch the
 // visible loading/error state — that stays tied to the active tab only.
 async function preloadRemainingCounts() {
-  const remaining = tabs
-    .map((tab) => tab.key)
-    .filter((key) => key !== initialTab)
+  const remaining = tabs.map((tab) => tab.key).filter((key) => key !== initialTab)
 
   await Promise.allSettled(
     remaining.map(async (tab) => {
@@ -134,7 +131,27 @@ async function preloadRemainingCounts() {
 
 function selectTab(tab: Tab) {
   activeTab.value = tab
+  error.value = ''
   loadTab(tab)
+}
+
+function retryActiveTab() {
+  loadTab(activeTab.value, true)
+}
+
+async function runProfileAction(action: () => Promise<void>, fallbackMessage: string) {
+  if (actionLoading.value) return
+
+  actionLoading.value = true
+  error.value = ''
+
+  try {
+    await action()
+  } catch (exception) {
+    error.value = extractErrorMessage(exception, fallbackMessage)
+  } finally {
+    actionLoading.value = false
+  }
 }
 
 /*
@@ -148,15 +165,11 @@ async function deleteOffer(id: number) {
     return
   }
 
-  try {
+  await runProfileAction(async () => {
     await api.delete(`/offers/${id}`)
 
-    myOffers.value = myOffers.value.filter(
-      (offer) => offer.id !== id,
-    )
-  } catch {
-    error.value = "Impossible de supprimer l'annonce."
-  }
+    myOffers.value = myOffers.value.filter((offer) => offer.id !== id)
+  }, "Impossible de supprimer l'annonce.")
 }
 
 /*
@@ -166,15 +179,11 @@ async function deleteOffer(id: number) {
 */
 
 async function removeFavorite(id: number) {
-  try {
+  await runProfileAction(async () => {
     await favoritesStore.toggle(id)
 
-    favorites.value = favorites.value.filter(
-      (offer) => offer.id !== id,
-    )
-  } catch {
-    error.value = 'Impossible de retirer ce favori.'
-  }
+    favorites.value = favorites.value.filter((offer) => offer.id !== id)
+  }, 'Impossible de retirer ce favori.')
 }
 
 /*
@@ -184,19 +193,15 @@ async function removeFavorite(id: number) {
 */
 
 async function cancelReservation(id: number) {
-  try {
+  await runProfileAction(async () => {
     await api.patch(`/reservations/${id}/cancel`)
 
-    const reservation = reservations.value.find(
-      (reservation) => reservation.id === id,
-    )
+    const reservation = reservations.value.find((reservation) => reservation.id === id)
 
     if (reservation) {
       reservation.status = 'cancelled'
     }
-  } catch {
-    error.value = "Impossible d'annuler cette réservation."
-  }
+  }, "Impossible d'annuler cette réservation.")
 }
 
 function handleReviewSubmitted(
@@ -212,16 +217,11 @@ function handleReviewSubmitted(
 |--------------------------------------------------------------------------
 */
 
-async function providerAction(
-  id: number,
-  action: 'confirm' | 'cancel' | 'complete',
-) {
-  try {
+async function providerAction(id: number, action: 'confirm' | 'cancel' | 'complete') {
+  await runProfileAction(async () => {
     await api.patch(`/provider/reservations/${id}/${action}`)
 
-    const reservation = providerReservations.value.find(
-      (reservation) => reservation.id === id,
-    )
+    const reservation = providerReservations.value.find((reservation) => reservation.id === id)
 
     if (!reservation) {
       return
@@ -238,9 +238,7 @@ async function providerAction(
     if (action === 'cancel') {
       reservation.status = 'cancelled'
     }
-  } catch {
-    error.value = 'Impossible de mettre à jour cette réservation.'
-  }
+  }, 'Impossible de mettre à jour cette réservation.')
 }
 
 /*
@@ -267,7 +265,6 @@ onMounted(() => {
 
 <template>
   <div class="mx-auto max-w-6xl px-6 py-8 lg:py-10">
-
     <!-- Profile header -->
     <ProfileHeader
       :offers-count="offersCount"
@@ -276,38 +273,37 @@ onMounted(() => {
     />
 
     <!-- Tabs -->
-    <ProfileTabs
-      :tabs="tabs"
-      :active-tab="activeTab"
-      @select="selectTab"
+    <ProfileTabs :tabs="tabs" :active-tab="activeTab" @select="selectTab" />
+
+    <AsyncStatePanel
+      v-if="error"
+      class="mb-5"
+      variant="error"
+      title="Cette section n’a pas pu être chargée"
+      :message="error"
+      action-label="Réessayer"
+      compact
+      @action="retryActiveTab"
     />
 
-    <!-- Error -->
+    <OfferGridSkeleton v-if="loading && !loadedTabs.has(activeTab)" :count="3" />
+
     <p
-      v-if="error"
-      class="mb-5 rounded-md bg-status-reserved/10 px-4 py-3 text-sm text-status-reserved"
+      v-if="actionLoading"
+      class="mb-4 rounded-lg bg-primary/5 px-4 py-3 text-center font-mono text-xs text-primary"
+      role="status"
+      aria-live="polite"
     >
-      {{ error }}
+      Mise à jour en cours…
     </p>
 
-    <!-- Loading -->
     <div
-      v-if="loading"
-      class="flex min-h-48 items-center justify-center"
+      v-if="loadedTabs.has(activeTab)"
+      :class="loading || actionLoading ? 'pointer-events-none opacity-60' : ''"
+      :aria-busy="loading || actionLoading"
+      :inert="actionLoading || undefined"
     >
-      <p class="font-mono text-sm text-ink/50">
-        Chargement…
-      </p>
-    </div>
-
-    <!-- Content -->
-    <template v-else>
-
-      <ProfileOffers
-        v-if="activeTab === 'offers'"
-        :offers="myOffers"
-        @delete="deleteOffer"
-      />
+      <ProfileOffers v-if="activeTab === 'offers'" :offers="myOffers" @delete="deleteOffer" />
 
       <ProfileFavorites
         v-else-if="activeTab === 'favorites'"
@@ -329,7 +325,6 @@ onMounted(() => {
         @cancel="providerAction($event, 'cancel')"
         @complete="providerAction($event, 'complete')"
       />
-
-    </template>
+    </div>
   </div>
 </template>

@@ -9,15 +9,14 @@ import type { Category, Offer } from '@/types/offer'
 
 import { extractErrorMessage } from '@/utils/errors'
 
-import OfferInfoStep, {
-  type OfferInfoData,
-} from '@/components/offers/OfferInfoStep.vue'
+import OfferInfoStep, { type OfferInfoData } from '@/components/offers/OfferInfoStep.vue'
 
 import OfferImagesStep from '@/components/offers/OfferImagesStep.vue'
 
 import OfferLocationStep, {
   type OfferLocationData,
 } from '@/components/offers/OfferLocationStep.vue'
+import AsyncStatePanel from '@/components/ui/AsyncStatePanel.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -31,9 +30,7 @@ const router = useRouter()
 const offerId = computed(() => {
   const id = route.params.id
 
-  return Array.isArray(id)
-    ? id[0]
-    : id
+  return Array.isArray(id) ? id[0] : id
 })
 
 const isEdit = computed(() => Boolean(offerId.value))
@@ -111,6 +108,7 @@ const location = ref<OfferLocationData>({
 const loadingOffer = ref(false)
 const submitting = ref(false)
 const error = ref('')
+const initialLoadFailed = ref(false)
 
 /*
 |--------------------------------------------------------------------------
@@ -153,40 +151,26 @@ async function loadOfferForEdit() {
     return
   }
 
-  loadingOffer.value = true
-  error.value = ''
+  const response = await api.get<{ data: Offer }>(`/offers/${offerId.value}`)
 
-  try {
-    const response = await api.get<{ data: Offer }>(
-      `/offers/${offerId.value}`,
-    )
+  const offer = response.data.data
 
-    const offer = response.data.data
-
-    offerInfo.value = {
-      title: offer.title,
-      description: offer.description,
-      categoryId: offer.category?.id ?? null,
-      type: offer.type,
-      price: String(offer.price),
-      isNegotiable: offer.is_negotiable,
-      status: offer.status,
-    }
-
-    location.value = {
-      latitude: offer.location?.latitude ?? null,
-      longitude: offer.location?.longitude ?? null,
-    }
-
-    existingImages.value = offer.images ?? []
-  } catch (err) {
-    error.value = extractErrorMessage(
-      err,
-      "Impossible de charger cette annonce.",
-    )
-  } finally {
-    loadingOffer.value = false
+  offerInfo.value = {
+    title: offer.title,
+    description: offer.description,
+    categoryId: offer.category?.id ?? null,
+    type: offer.type,
+    price: String(offer.price),
+    isNegotiable: offer.is_negotiable,
+    status: offer.status,
   }
+
+  location.value = {
+    latitude: offer.location?.latitude ?? null,
+    longitude: offer.location?.longitude ?? null,
+  }
+
+  existingImages.value = offer.images ?? []
 }
 
 /*
@@ -201,19 +185,11 @@ async function removeExistingImage(imageId: number) {
   }
 
   try {
-    await api.delete(
-      `/offers/${offerId.value}/images/${imageId}`,
-    )
+    await api.delete(`/offers/${offerId.value}/images/${imageId}`)
 
-    existingImages.value =
-      existingImages.value.filter(
-        (image) => image.id !== imageId,
-      )
+    existingImages.value = existingImages.value.filter((image) => image.id !== imageId)
   } catch (err) {
-    error.value = extractErrorMessage(
-      err,
-      'Impossible de supprimer cette photo.',
-    )
+    error.value = extractErrorMessage(err, 'Impossible de supprimer cette photo.')
   }
 }
 
@@ -226,12 +202,8 @@ async function removeExistingImage(imageId: number) {
 async function handleSubmit() {
   error.value = ''
 
-  if (
-    location.value.latitude === null ||
-    location.value.longitude === null
-  ) {
-    error.value =
-      "Choisis un emplacement avant de publier."
+  if (location.value.latitude === null || location.value.longitude === null) {
+    error.value = 'Choisis un emplacement avant de publier.'
 
     step.value = 3
 
@@ -248,34 +220,27 @@ async function handleSubmit() {
     */
 
     if (isEdit.value) {
-      await api.put(
-        `/offers/${offerId.value}`,
-        {
-          category_id: offerInfo.value.categoryId,
+      await api.put(`/offers/${offerId.value}`, {
+        category_id: offerInfo.value.categoryId,
 
-          title: offerInfo.value.title,
+        title: offerInfo.value.title,
 
-          description:
-            offerInfo.value.description,
+        description: offerInfo.value.description,
 
-          type: offerInfo.value.type,
+        type: offerInfo.value.type,
 
-          price: offerInfo.value.price,
+        price: offerInfo.value.price,
 
-          is_negotiable:
-            offerInfo.value.isNegotiable,
+        is_negotiable: offerInfo.value.isNegotiable,
 
-          status: offerInfo.value.status,
+        status: offerInfo.value.status,
 
-          location: {
-            latitude:
-              location.value.latitude,
+        location: {
+          latitude: location.value.latitude,
 
-            longitude:
-              location.value.longitude,
-          },
+          longitude: location.value.longitude,
         },
-      )
+      })
 
       /*
       |--------------------------------------------------------------------------
@@ -295,13 +260,9 @@ async function handleSubmit() {
             id: number
             url: string
           }[]
-        }>(
-          `/offers/${offerId.value}/images`,
-          formData,
-        )
+        }>(`/offers/${offerId.value}/images`, formData)
 
-        existingImages.value =
-          response.data.images
+        existingImages.value = response.data.images
       }
 
       await router.push({
@@ -322,52 +283,23 @@ async function handleSubmit() {
 
     const formData = new FormData()
 
-    formData.append(
-      'category_id',
-      String(offerInfo.value.categoryId),
-    )
+    formData.append('category_id', String(offerInfo.value.categoryId))
 
-    formData.append(
-      'title',
-      offerInfo.value.title,
-    )
+    formData.append('title', offerInfo.value.title)
 
-    formData.append(
-      'description',
-      offerInfo.value.description,
-    )
+    formData.append('description', offerInfo.value.description)
 
-    formData.append(
-      'type',
-      offerInfo.value.type,
-    )
+    formData.append('type', offerInfo.value.type)
 
-    formData.append(
-      'price',
-      offerInfo.value.price,
-    )
+    formData.append('price', offerInfo.value.price)
 
-    formData.append(
-      'is_negotiable',
-      offerInfo.value.isNegotiable
-        ? '1'
-        : '0',
-    )
+    formData.append('is_negotiable', offerInfo.value.isNegotiable ? '1' : '0')
 
-    formData.append(
-      'status',
-      offerInfo.value.status,
-    )
+    formData.append('status', offerInfo.value.status)
 
-    formData.append(
-      'location[latitude]',
-      String(location.value.latitude),
-    )
+    formData.append('location[latitude]', String(location.value.latitude))
 
-    formData.append(
-      'location[longitude]',
-      String(location.value.longitude),
-    )
+    formData.append('location[longitude]', String(location.value.longitude))
 
     images.value.forEach((file) => {
       formData.append('images[]', file)
@@ -375,10 +307,7 @@ async function handleSubmit() {
 
     const response = await api.post<{
       data: Offer
-    }>(
-      '/offers',
-      formData,
-    )
+    }>('/offers', formData)
 
     await router.push({
       name: 'offer-details',
@@ -387,10 +316,7 @@ async function handleSubmit() {
       },
     })
   } catch (err) {
-    error.value = extractErrorMessage(
-      err,
-      "Impossible d'enregistrer l'annonce.",
-    )
+    error.value = extractErrorMessage(err, "Impossible d'enregistrer l'annonce.")
   } finally {
     submitting.value = false
   }
@@ -402,18 +328,24 @@ async function handleSubmit() {
 |--------------------------------------------------------------------------
 */
 
-onMounted(async () => {
+async function loadInitialData() {
+  loadingOffer.value = true
+  initialLoadFailed.value = false
+  error.value = ''
+
   try {
     categories.value = await fetchCategories()
 
     await loadOfferForEdit()
   } catch (err) {
-    error.value = extractErrorMessage(
-      err,
-      'Impossible de charger les données.',
-    )
+    initialLoadFailed.value = true
+    error.value = extractErrorMessage(err, 'Impossible de charger les données.')
+  } finally {
+    loadingOffer.value = false
   }
-})
+}
+
+onMounted(loadInitialData)
 </script>
 
 <template>
@@ -422,32 +354,20 @@ onMounted(async () => {
     <div class="mb-8">
       <div class="mb-2 flex items-center justify-between">
         <div>
-          <p
-            class="font-mono text-xs tracking-widest text-primary uppercase"
-          >
+          <p class="font-mono text-xs tracking-widest text-primary uppercase">
             {{ isEdit ? 'Modifier' : 'Nouvelle annonce' }}
           </p>
 
-          <h1
-            class="mt-1 font-display text-3xl font-bold text-primary"
-          >
-            {{ isEdit
-              ? "Modifier l'annonce"
-              : 'Publier une annonce' }}
+          <h1 class="mt-1 font-display text-3xl font-bold text-primary">
+            {{ isEdit ? "Modifier l'annonce" : 'Publier une annonce' }}
           </h1>
         </div>
 
-        <span
-          class="font-mono text-xs text-ink/40"
-        >
-          {{ step }}/{{ totalSteps }}
-        </span>
+        <span class="font-mono text-xs text-ink/40"> {{ step }}/{{ totalSteps }} </span>
       </div>
 
       <!-- Progress -->
-      <div
-        class="mt-5 h-1.5 overflow-hidden rounded-full bg-ink/10"
-      >
+      <div class="mt-5 h-1.5 overflow-hidden rounded-full bg-ink/10">
         <div
           class="h-full rounded-full bg-primary transition-all duration-300"
           :style="{ width: progress }"
@@ -455,56 +375,33 @@ onMounted(async () => {
       </div>
 
       <!-- Step labels -->
-      <div
-        class="mt-3 grid grid-cols-3 text-center font-mono text-[10px] uppercase"
-      >
-        <span
-          :class="
-            step >= 1
-              ? 'text-primary'
-              : 'text-ink/30'
-          "
-        >
-          Informations
-        </span>
+      <div class="mt-3 grid grid-cols-3 text-center font-mono text-[10px] uppercase">
+        <span :class="step >= 1 ? 'text-primary' : 'text-ink/30'"> Informations </span>
 
-        <span
-          :class="
-            step >= 2
-              ? 'text-primary'
-              : 'text-ink/30'
-          "
-        >
-          Photos
-        </span>
+        <span :class="step >= 2 ? 'text-primary' : 'text-ink/30'"> Photos </span>
 
-        <span
-          :class="
-            step >= 3
-              ? 'text-primary'
-              : 'text-ink/30'
-          "
-        >
-          Emplacement
-        </span>
+        <span :class="step >= 3 ? 'text-primary' : 'text-ink/30'"> Emplacement </span>
       </div>
     </div>
 
-    <!-- Loading -->
-    <div
+    <AsyncStatePanel
       v-if="loadingOffer"
-      class="rounded-2xl border border-ink/10 bg-surface p-8 text-center"
-    >
-      <p class="font-mono text-sm text-ink/50">
-        Chargement de l'annonce…
-      </p>
-    </div>
+      variant="loading"
+      title="Préparation du formulaire"
+      message="Nous chargeons les catégories et les données de l’annonce."
+    />
+
+    <AsyncStatePanel
+      v-else-if="initialLoadFailed"
+      variant="error"
+      title="Le formulaire ne peut pas être affiché"
+      :message="error"
+      action-label="Réessayer"
+      @action="loadInitialData"
+    />
 
     <!-- Form -->
-    <div
-      v-else
-      class="rounded-2xl border border-ink/10 bg-surface p-5 shadow-sm sm:p-7"
-    >
+    <div v-else class="rounded-2xl border border-ink/10 bg-surface p-5 shadow-sm sm:p-7">
       <!-- Global error -->
       <div
         v-if="error"
@@ -533,12 +430,7 @@ onMounted(async () => {
       />
 
       <!-- STEP 3 -->
-      <OfferLocationStep
-        v-else
-        v-model="location"
-        @back="previousStep"
-        @submit="handleSubmit"
-      />
+      <OfferLocationStep v-else v-model="location" @back="previousStep" @submit="handleSubmit" />
 
       <!-- Submit loading -->
       <div
@@ -546,9 +438,7 @@ onMounted(async () => {
         class="mt-5 flex items-center justify-center gap-2 rounded-xl bg-primary/5 px-4 py-3 font-mono text-xs text-primary"
       >
         <span>
-          {{ isEdit
-            ? "Enregistrement des modifications…"
-            : "Publication de l'annonce…" }}
+          {{ isEdit ? 'Enregistrement des modifications…' : "Publication de l'annonce…" }}
         </span>
       </div>
     </div>

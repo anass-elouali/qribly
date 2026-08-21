@@ -6,6 +6,7 @@ import type { Offer, PaginatedResponse } from '@/types/offer'
 export const useFavoritesStore = defineStore('favorites', () => {
   const ids = ref<Set<number>>(new Set())
   const loaded = ref(false)
+  const pendingIds = ref<Set<number>>(new Set())
 
   // Several FavoriteButton instances can mount around the same time and all
   // call load() before the first fetch finishes — share the in-flight
@@ -28,7 +29,9 @@ export const useFavoritesStore = defineStore('favorites', () => {
         let lastPage = 1
 
         do {
-          const response = await api.get<PaginatedResponse<Offer>>('/favorites', { params: { page } })
+          const response = await api.get<PaginatedResponse<Offer>>('/favorites', {
+            params: { page },
+          })
           response.data.data.forEach((offer) => allIds.add(offer.id))
           lastPage = response.data.meta.last_page
           page++
@@ -50,21 +53,38 @@ export const useFavoritesStore = defineStore('favorites', () => {
     return ids.value.has(offerId)
   }
 
+  function isPending(offerId: number) {
+    return pendingIds.value.has(offerId)
+  }
+
   async function toggle(offerId: number) {
-    if (ids.value.has(offerId)) {
-      await api.delete(`/offers/${offerId}/favorite`)
-      ids.value.delete(offerId)
-    } else {
-      await api.post(`/offers/${offerId}/favorite`)
-      ids.value.add(offerId)
+    if (isPending(offerId)) {
+      return
+    }
+
+    pendingIds.value = new Set(pendingIds.value).add(offerId)
+
+    try {
+      if (ids.value.has(offerId)) {
+        await api.delete(`/offers/${offerId}/favorite`)
+        ids.value.delete(offerId)
+      } else {
+        await api.post(`/offers/${offerId}/favorite`)
+        ids.value.add(offerId)
+      }
+    } finally {
+      const nextPendingIds = new Set(pendingIds.value)
+      nextPendingIds.delete(offerId)
+      pendingIds.value = nextPendingIds
     }
   }
 
   function reset() {
     ids.value = new Set()
+    pendingIds.value = new Set()
     loaded.value = false
     loadPromise = null
   }
 
-  return { ids, loaded, load, isFavorite, toggle, reset }
+  return { ids, loaded, pendingIds, load, isFavorite, isPending, toggle, reset }
 })

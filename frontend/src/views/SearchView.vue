@@ -3,12 +3,15 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import api from '@/services/api'
 import { fetchCategories } from '@/services/categories'
+import { extractErrorMessage } from '@/utils/errors'
 import {
   LocationUnavailableError,
   smartSearchOffers,
   type SmartSearchMeta,
 } from '@/services/smartSearch'
 import OfferCard from '@/components/offers/OfferCard.vue'
+import OfferGridSkeleton from '@/components/offers/OfferGridSkeleton.vue'
+import AsyncStatePanel from '@/components/ui/AsyncStatePanel.vue'
 import type { Category, Offer, PaginatedResponse } from '@/types/offer'
 
 const route = useRoute()
@@ -30,8 +33,12 @@ const lastPage = ref(1)
 
 const loading = ref(false)
 const error = ref('')
+const categoriesLoading = ref(true)
+const categoriesError = ref('')
 const searchNotice = ref('')
 const smartSearchMeta = ref<SmartSearchMeta | null>(null)
+
+let offersRequestId = 0
 
 const isAssistantSearch = computed(
   () => route.query.ai === '1' && searchQuery.value.trim().length >= 2,
@@ -64,6 +71,7 @@ const statuses = [
 ]
 
 async function loadOffers() {
+  const requestId = ++offersRequestId
   loading.value = true
   error.value = ''
   searchNotice.value = ''
@@ -71,30 +79,54 @@ async function loadOffers() {
 
   try {
     if (isAssistantSearch.value) {
-      await loadSmartOffers()
+      await loadSmartOffers(requestId)
     } else {
-      await loadClassicOffers()
+      await loadClassicOffers(requestId)
     }
   } catch (exception) {
+    if (requestId !== offersRequestId) {
+      return
+    }
+
     if (isAssistantSearch.value) {
-      searchNotice.value = exception instanceof LocationUnavailableError
-        ? 'Autorise ta position pour que Qrib puisse chercher autour de toi. Résultats classiques affichés.'
-        : 'Qrib est momentanément indisponible. Résultats classiques affichés.'
+      searchNotice.value =
+        exception instanceof LocationUnavailableError
+          ? 'Autorise ta position pour que Qrib puisse chercher autour de toi. Résultats classiques affichés.'
+          : 'Qrib est momentanément indisponible. Résultats classiques affichés.'
 
       try {
-        await loadClassicOffers()
-      } catch {
-        error.value = 'Impossible de charger les annonces.'
+        await loadClassicOffers(requestId)
+      } catch (fallbackError) {
+        if (requestId === offersRequestId) {
+          error.value = extractErrorMessage(fallbackError, 'Impossible de charger les annonces.')
+        }
       }
     } else {
-      error.value = 'Impossible de charger les annonces.'
+      if (requestId === offersRequestId) {
+        error.value = extractErrorMessage(exception, 'Impossible de charger les annonces.')
+      }
     }
   } finally {
-    loading.value = false
+    if (requestId === offersRequestId) {
+      loading.value = false
+    }
   }
 }
 
-async function loadClassicOffers() {
+async function loadCategories() {
+  categoriesLoading.value = true
+  categoriesError.value = ''
+
+  try {
+    categories.value = await fetchCategories()
+  } catch (exception) {
+    categoriesError.value = extractErrorMessage(exception, 'Impossible de charger les catégories.')
+  } finally {
+    categoriesLoading.value = false
+  }
+}
+
+async function loadClassicOffers(requestId: number) {
   const response = await api.get<PaginatedResponse<Offer>>('/offers', {
     params: {
       q: searchQuery.value || undefined,
@@ -107,12 +139,18 @@ async function loadClassicOffers() {
     },
   })
 
-  offers.value = response.data.data
-  lastPage.value = response.data.meta.last_page
+  if (requestId === offersRequestId) {
+    offers.value = response.data.data
+    lastPage.value = response.data.meta.last_page
+  }
 }
 
-async function loadSmartOffers() {
+async function loadSmartOffers(requestId: number) {
   const response = await smartSearchOffers(searchQuery.value.trim())
+
+  if (requestId !== offersRequestId) {
+    return
+  }
 
   offers.value = response.data
   lastPage.value = 1
@@ -131,17 +169,11 @@ function updateFilters() {
     name: 'search',
     query: {
       q: searchQuery.value || undefined,
-      category: selectedCategory.value
-        ? String(selectedCategory.value)
-        : undefined,
+      category: selectedCategory.value ? String(selectedCategory.value) : undefined,
       type: selectedType.value || undefined,
       status: selectedStatus.value || undefined,
-      min_price: minPrice.value !== null
-        ? String(minPrice.value)
-        : undefined,
-      max_price: maxPrice.value !== null
-        ? String(maxPrice.value)
-        : undefined,
+      min_price: minPrice.value !== null ? String(minPrice.value) : undefined,
+      max_price: maxPrice.value !== null ? String(maxPrice.value) : undefined,
     },
   })
 }
@@ -166,6 +198,8 @@ function applyPriceFilter() {
 }
 
 function clearFilters() {
+  const alreadyClear = !hasActiveFilters()
+
   searchQuery.value = ''
   selectedCategory.value = null
   selectedType.value = null
@@ -175,6 +209,10 @@ function clearFilters() {
   page.value = 1
 
   updateFilters()
+
+  if (alreadyClear) {
+    loadOffers()
+  }
 }
 
 function hasActiveFilters() {
@@ -189,35 +227,18 @@ function hasActiveFilters() {
 }
 
 function loadFiltersFromUrl() {
-  searchQuery.value =
-    typeof route.query.q === 'string'
-      ? route.query.q
-      : ''
+  searchQuery.value = typeof route.query.q === 'string' ? route.query.q : ''
 
   selectedCategory.value =
-    typeof route.query.category === 'string'
-      ? Number(route.query.category)
-      : null
+    typeof route.query.category === 'string' ? Number(route.query.category) : null
 
-  selectedType.value =
-    typeof route.query.type === 'string'
-      ? route.query.type
-      : null
+  selectedType.value = typeof route.query.type === 'string' ? route.query.type : null
 
-  selectedStatus.value =
-    typeof route.query.status === 'string'
-      ? route.query.status
-      : null
+  selectedStatus.value = typeof route.query.status === 'string' ? route.query.status : null
 
-  minPrice.value =
-    typeof route.query.min_price === 'string'
-      ? Number(route.query.min_price)
-      : null
+  minPrice.value = typeof route.query.min_price === 'string' ? Number(route.query.min_price) : null
 
-  maxPrice.value =
-    typeof route.query.max_price === 'string'
-      ? Number(route.query.max_price)
-      : null
+  maxPrice.value = typeof route.query.max_price === 'string' ? Number(route.query.max_price) : null
 }
 
 function goToPage(newPage: number) {
@@ -237,35 +258,23 @@ watch(
   },
 )
 
-onMounted(async () => {
-  categories.value = await fetchCategories()
-
+onMounted(() => {
   loadFiltersFromUrl()
-  await loadOffers()
+  Promise.all([loadCategories(), loadOffers()])
 })
 </script>
 
 <template>
   <div class="mx-auto max-w-7xl px-6 py-8">
-
     <!-- Search header -->
     <section class="mb-8">
-      <h1 class="font-display text-3xl font-bold text-primary">
-        Rechercher
-      </h1>
+      <h1 class="font-display text-3xl font-bold text-primary">Rechercher</h1>
 
-      <p class="mt-2 text-sm text-ink/60">
-        Trouvez des produits et services près de chez vous.
-      </p>
+      <p class="mt-2 text-sm text-ink/60">Trouvez des produits et services près de chez vous.</p>
 
-      <form
-        class="mt-6 flex flex-col gap-3 sm:flex-row"
-        @submit.prevent="updateFilters"
-      >
+      <form class="mt-6 flex flex-col gap-3 sm:flex-row" @submit.prevent="updateFilters">
         <div
-          class="flex flex-1 items-center rounded-lg border border-ink/15
-                 bg-surface px-4 transition-colors
-                 focus-within:border-primary"
+          class="flex flex-1 items-center rounded-lg border border-ink/15 bg-surface px-4 transition-colors focus-within:border-primary"
         >
           <svg
             class="mr-3 h-5 w-5 shrink-0 text-ink/40"
@@ -282,33 +291,26 @@ onMounted(async () => {
             v-model="searchQuery"
             type="search"
             placeholder="Que recherchez-vous ?"
-            class="w-full bg-transparent py-3 text-sm text-ink
-                   outline-none placeholder:text-ink/40"
+            class="w-full bg-transparent py-3 text-sm text-ink outline-none placeholder:text-ink/40"
           />
         </div>
 
         <button
           type="submit"
-          class="rounded-lg bg-primary px-7 py-3 text-sm
-                 font-semibold text-surface transition-opacity
-                 hover:opacity-90"
+          :disabled="loading"
+          class="rounded-lg bg-primary px-7 py-3 text-sm font-semibold text-surface transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
         >
-          Rechercher
+          {{ loading ? 'Recherche…' : 'Rechercher' }}
         </button>
       </form>
     </section>
 
     <div class="flex flex-col gap-8 lg:flex-row">
-
       <!-- Sidebar -->
       <aside class="w-full shrink-0 lg:w-64">
-
         <div class="rounded-xl border border-ink/10 bg-surface p-5">
-
           <div class="mb-5 flex items-center justify-between">
-            <h2 class="font-display text-lg font-semibold text-ink">
-              Filtres
-            </h2>
+            <h2 class="font-display text-lg font-semibold text-ink">Filtres</h2>
 
             <button
               v-if="hasActiveFilters()"
@@ -322,9 +324,7 @@ onMounted(async () => {
 
           <!-- Type -->
           <div class="border-b border-ink/10 pb-5">
-            <h3 class="mb-3 text-sm font-semibold text-ink">
-              Type
-            </h3>
+            <h3 class="mb-3 text-sm font-semibold text-ink">Type</h3>
 
             <div class="space-y-2">
               <label
@@ -344,9 +344,7 @@ onMounted(async () => {
                 <span>{{ type.label }}</span>
               </label>
 
-              <label
-                class="flex cursor-pointer items-center gap-3 text-sm text-ink/70"
-              >
+              <label class="flex cursor-pointer items-center gap-3 text-sm text-ink/70">
                 <input
                   type="radio"
                   name="type"
@@ -362,57 +360,81 @@ onMounted(async () => {
 
           <!-- Category -->
           <div class="border-b border-ink/10 py-5">
-            <h3 class="mb-3 text-sm font-semibold text-ink">
-              Catégorie
-            </h3>
+            <h3 class="mb-3 text-sm font-semibold text-ink">Catégorie</h3>
 
             <div class="max-h-64 space-y-2 overflow-y-auto pr-1">
+              <template v-if="categoriesLoading">
+                <div
+                  v-for="index in 5"
+                  :key="index"
+                  class="flex items-center gap-3"
+                  aria-hidden="true"
+                >
+                  <span
+                    class="h-3.5 w-3.5 animate-pulse rounded-full bg-ink/10 motion-reduce:animate-none"
+                  />
+                  <span
+                    class="h-3 animate-pulse rounded bg-ink/10 motion-reduce:animate-none"
+                    :class="index % 2 === 0 ? 'w-24' : 'w-20'"
+                  />
+                </div>
 
-              <label
-                class="flex cursor-pointer items-center gap-3 text-sm text-ink/70"
-              >
-                <input
-                  type="radio"
-                  name="category"
-                  :checked="selectedCategory === null"
-                  class="accent-primary"
-                  @change="selectCategory(null)"
-                />
+                <span class="sr-only" role="status">Chargement des catégories…</span>
+              </template>
 
-                <span>Toutes</span>
-              </label>
+              <div v-else-if="categoriesError" role="alert">
+                <p class="text-xs leading-5 text-status-reserved">
+                  {{ categoriesError }}
+                </p>
 
-              <label
-                v-for="category in categories"
-                :key="category.id"
-                class="flex cursor-pointer items-center gap-3 text-sm text-ink/70"
-              >
-                <input
-                  type="radio"
-                  name="category"
-                  :value="category.id"
-                  :checked="selectedCategory === category.id"
-                  class="accent-primary"
-                  @change="selectCategory(category.id)"
-                />
+                <button
+                  type="button"
+                  class="mt-2 text-xs font-semibold text-primary hover:underline"
+                  @click="loadCategories"
+                >
+                  Réessayer
+                </button>
+              </div>
 
-                <span>{{ category.name }}</span>
-              </label>
+              <template v-else>
+                <label class="flex cursor-pointer items-center gap-3 text-sm text-ink/70">
+                  <input
+                    type="radio"
+                    name="category"
+                    :checked="selectedCategory === null"
+                    class="accent-primary"
+                    @change="selectCategory(null)"
+                  />
 
+                  <span>Toutes</span>
+                </label>
+
+                <label
+                  v-for="category in categories"
+                  :key="category.id"
+                  class="flex cursor-pointer items-center gap-3 text-sm text-ink/70"
+                >
+                  <input
+                    type="radio"
+                    name="category"
+                    :value="category.id"
+                    :checked="selectedCategory === category.id"
+                    class="accent-primary"
+                    @change="selectCategory(category.id)"
+                  />
+
+                  <span>{{ category.name }}</span>
+                </label>
+              </template>
             </div>
           </div>
 
           <!-- Status -->
           <div class="border-b border-ink/10 py-5">
-            <h3 class="mb-3 text-sm font-semibold text-ink">
-              Statut
-            </h3>
+            <h3 class="mb-3 text-sm font-semibold text-ink">Statut</h3>
 
             <div class="space-y-2">
-
-              <label
-                class="flex cursor-pointer items-center gap-3 text-sm text-ink/70"
-              >
+              <label class="flex cursor-pointer items-center gap-3 text-sm text-ink/70">
                 <input
                   type="radio"
                   name="status"
@@ -440,26 +462,20 @@ onMounted(async () => {
 
                 <span>{{ status.label }}</span>
               </label>
-
             </div>
           </div>
 
           <!-- Price -->
           <div class="pt-5">
-            <h3 class="mb-3 text-sm font-semibold text-ink">
-              Prix
-            </h3>
+            <h3 class="mb-3 text-sm font-semibold text-ink">Prix</h3>
 
             <div class="flex items-center gap-2">
-
               <input
                 v-model.number="minPrice"
                 type="number"
                 min="0"
                 placeholder="Min"
-                class="w-full rounded-md border border-ink/15
-                       bg-surface px-3 py-2 text-sm outline-none
-                       focus:border-primary"
+                class="w-full rounded-md border border-ink/15 bg-surface px-3 py-2 text-sm outline-none focus:border-primary"
                 @keyup.enter="applyPriceFilter"
               />
 
@@ -470,34 +486,25 @@ onMounted(async () => {
                 type="number"
                 min="0"
                 placeholder="Max"
-                class="w-full rounded-md border border-ink/15
-                       bg-surface px-3 py-2 text-sm outline-none
-                       focus:border-primary"
+                class="w-full rounded-md border border-ink/15 bg-surface px-3 py-2 text-sm outline-none focus:border-primary"
                 @keyup.enter="applyPriceFilter"
               />
-
             </div>
 
             <button
               type="button"
-              class="mt-3 w-full rounded-md border border-ink/15
-                     px-3 py-2 text-sm font-medium text-ink/70
-                     transition-colors hover:border-primary
-                     hover:text-primary"
+              class="mt-3 w-full rounded-md border border-ink/15 px-3 py-2 text-sm font-medium text-ink/70 transition-colors hover:border-primary hover:text-primary"
               @click="applyPriceFilter"
             >
               Appliquer
             </button>
           </div>
-
         </div>
       </aside>
 
       <!-- Results -->
       <main class="min-w-0 flex-1">
-
         <div class="mb-5 flex items-center justify-between">
-
           <div>
             <h2 class="font-display text-xl font-semibold text-ink">
               {{ isSemanticSearch ? 'Résultats pertinents près de vous' : 'Résultats' }}
@@ -508,23 +515,15 @@ onMounted(async () => {
                 Qrib a classé {{ smartSearchMeta?.candidate_count }} offres autour de vous.
               </span>
 
-              <span v-else-if="searchQuery">
-                Résultats pour « {{ searchQuery }} »
-              </span>
+              <span v-else-if="searchQuery"> Résultats pour « {{ searchQuery }} » </span>
 
-              <span v-else>
-                Découvrez les annonces disponibles
-              </span>
+              <span v-else> Découvrez les annonces disponibles </span>
             </p>
           </div>
 
-          <span
-            v-if="!loading"
-            class="font-mono text-xs text-ink/40"
-          >
+          <span v-if="!loading && !error" class="font-mono text-xs text-ink/40">
             Page {{ page }} / {{ lastPage }}
           </span>
-
         </div>
 
         <p
@@ -534,52 +533,33 @@ onMounted(async () => {
           {{ searchNotice }}
         </p>
 
-        <!-- Error -->
-        <p
+        <AsyncStatePanel
           v-if="error"
-          class="rounded-lg bg-status-reserved/10 px-4 py-3
-                 text-sm text-status-reserved"
-        >
-          {{ error }}
-        </p>
+          class="mb-5"
+          variant="error"
+          title="La recherche n’a pas abouti"
+          :message="error"
+          action-label="Réessayer"
+          compact
+          @action="loadOffers"
+        />
 
-        <!-- Loading -->
+        <OfferGridSkeleton v-if="loading && offers.length === 0" />
+
+        <AsyncStatePanel
+          v-else-if="!error && offers.length === 0"
+          variant="empty"
+          title="Aucune annonce trouvée"
+          message="Essayez de modifier vos filtres ou votre recherche."
+          action-label="Effacer les filtres"
+          @action="clearFilters"
+        />
+
         <div
-          v-else-if="loading"
-          class="flex min-h-64 items-center justify-center"
-        >
-          <p class="font-mono text-sm text-ink/50">
-            Chargement…
-          </p>
-        </div>
-
-        <!-- Empty -->
-        <div
-          v-else-if="offers.length === 0"
-          class="flex min-h-64 flex-col items-center justify-center
-                 rounded-xl border border-dashed border-ink/15"
-        >
-          <p class="font-display text-lg font-semibold text-ink">
-            Aucune annonce trouvée
-          </p>
-
-          <p class="mt-2 text-sm text-ink/50">
-            Essayez de modifier vos filtres ou votre recherche.
-          </p>
-
-          <button
-            type="button"
-            class="mt-4 text-sm font-medium text-primary hover:underline"
-            @click="clearFilters"
-          >
-            Effacer les filtres
-          </button>
-        </div>
-
-        <!-- Offers -->
-        <div
-          v-else
+          v-if="offers.length > 0"
           class="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3"
+          :class="loading ? 'pointer-events-none opacity-60' : ''"
+          :aria-busy="loading"
         >
           <OfferCard
             v-for="offer in offers"
@@ -596,35 +576,29 @@ onMounted(async () => {
 
         <!-- Pagination -->
         <div
-          v-if="lastPage > 1"
-          class="mt-8 flex items-center justify-center gap-4
-                 font-mono text-sm"
+          v-if="lastPage > 1 && offers.length > 0"
+          class="mt-8 flex items-center justify-center gap-4 font-mono text-sm"
         >
           <button
             type="button"
-            class="rounded-md border border-ink/15 px-4 py-2
-                   disabled:cursor-not-allowed disabled:opacity-40"
-            :disabled="page === 1"
+            class="rounded-md border border-ink/15 px-4 py-2 disabled:cursor-not-allowed disabled:opacity-40"
+            :disabled="page === 1 || loading"
             @click="goToPage(page - 1)"
           >
             ←
           </button>
 
-          <span class="text-ink/60">
-            Page {{ page }} / {{ lastPage }}
-          </span>
+          <span class="text-ink/60"> Page {{ page }} / {{ lastPage }} </span>
 
           <button
             type="button"
-            class="rounded-md border border-ink/15 px-4 py-2
-                   disabled:cursor-not-allowed disabled:opacity-40"
-            :disabled="page === lastPage"
+            class="rounded-md border border-ink/15 px-4 py-2 disabled:cursor-not-allowed disabled:opacity-40"
+            :disabled="page === lastPage || loading"
             @click="goToPage(page + 1)"
           >
             →
           </button>
         </div>
-
       </main>
     </div>
   </div>

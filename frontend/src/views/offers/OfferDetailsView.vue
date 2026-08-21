@@ -9,10 +9,12 @@ import type { Offer } from '@/types/offer'
 import type { Conversation } from '@/types/conversation'
 import { statusLabel, statusColor, formatPrice } from '@/utils/offer'
 import { resolveStorageUrl } from '@/utils/url'
-import { extractErrorMessage } from '@/utils/errors'
+import { extractErrorMessage, isNotFoundError } from '@/utils/errors'
 import { initials } from '@/utils/user'
 import FavoriteButton from '@/components/offers/FavoriteButton.vue'
+import OfferDetailsSkeleton from '@/components/offers/OfferDetailsSkeleton.vue'
 import OfferReviews from '@/components/reviews/OfferReviews.vue'
+import AsyncStatePanel from '@/components/ui/AsyncStatePanel.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -41,8 +43,10 @@ async function loadOffer() {
   try {
     const response = await api.get<{ data: Offer }>(`/offers/${route.params.id}`)
     offer.value = response.data.data
-  } catch {
-    error.value = "Cette annonce n'existe pas ou plus."
+  } catch (exception) {
+    error.value = isNotFoundError(exception)
+      ? "Cette annonce n'existe pas ou plus."
+      : extractErrorMessage(exception, "Impossible de charger l'annonce.")
   } finally {
     loading.value = false
   }
@@ -86,7 +90,9 @@ async function contactOwner() {
   contactError.value = ''
 
   try {
-    const response = await api.post<Conversation>('/conversations', { user_id: offer.value.owner.id })
+    const response = await api.post<Conversation>('/conversations', {
+      user_id: offer.value.owner.id,
+    })
     chatStore.upsertConversation(response.data)
     router.push({ name: 'conversation', params: { id: response.data.id } })
   } catch {
@@ -97,25 +103,39 @@ async function contactOwner() {
 }
 
 onMounted(loadOffer)
-watch(() => route.params.id, () => {
-  loadOffer()
-  bookingSuccess.value = false
-  bookingError.value = ''
-})
+watch(
+  () => route.params.id,
+  () => {
+    offer.value = null
+    loadOffer()
+    bookingSuccess.value = false
+    bookingError.value = ''
+  },
+)
 </script>
 
 <template>
   <div class="mx-auto max-w-4xl px-6 py-8">
-    <p v-if="loading" class="font-mono text-sm text-ink/50">Chargement…</p>
+    <OfferDetailsSkeleton v-if="loading" />
 
-    <p v-else-if="error" class="rounded-md bg-status-reserved/10 px-4 py-3 text-sm text-status-reserved">
-      {{ error }}
-    </p>
+    <AsyncStatePanel
+      v-else-if="error"
+      variant="error"
+      title="Impossible d’afficher cette annonce"
+      :message="error"
+      action-label="Réessayer"
+      @action="loadOffer"
+    />
 
     <div v-else-if="offer" class="grid gap-8 md:grid-cols-2">
       <div class="flex flex-col gap-3">
         <div class="aspect-[4/3] overflow-hidden rounded-md bg-primary">
-          <img v-if="selectedImageUrl" :src="selectedImageUrl" :alt="offer.title" class="h-full w-full object-cover" />
+          <img
+            v-if="selectedImageUrl"
+            :src="selectedImageUrl"
+            :alt="offer.title"
+            class="h-full w-full object-cover"
+          />
           <div
             v-else
             class="flex h-full items-center justify-center font-mono text-xs tracking-wide text-surface/70 uppercase"
@@ -133,7 +153,11 @@ watch(() => route.params.id, () => {
             :class="index === selectedImageIndex ? 'border-primary' : 'border-transparent'"
             @click="selectedImageIndex = index"
           >
-            <img :src="resolveStorageUrl(image.url)" :alt="`Photo ${index + 1}`" class="h-full w-full object-cover" />
+            <img
+              :src="resolveStorageUrl(image.url)"
+              :alt="`Photo ${index + 1}`"
+              class="h-full w-full object-cover"
+            />
           </button>
         </div>
       </div>
@@ -158,14 +182,19 @@ watch(() => route.params.id, () => {
           >
             {{ statusLabel[offer.status] }}
           </span>
-          <span v-if="offer.is_negotiable" class="font-mono text-xs text-ink/50">Prix négociable</span>
+          <span v-if="offer.is_negotiable" class="font-mono text-xs text-ink/50"
+            >Prix négociable</span
+          >
         </div>
 
         <p class="font-body text-ink/80">{{ offer.description }}</p>
 
         <p class="font-mono text-xs text-ink/40">Publié {{ dayjs(offer.created_at).fromNow() }}</p>
 
-        <div v-if="offer.owner" class="flex flex-col gap-2 rounded-md border border-ink/10 bg-surface p-3">
+        <div
+          v-if="offer.owner"
+          class="flex flex-col gap-2 rounded-md border border-ink/10 bg-surface p-3"
+        >
           <div class="flex items-center justify-between gap-3">
             <div class="flex items-center gap-3">
               <span
@@ -187,7 +216,9 @@ watch(() => route.params.id, () => {
             </button>
           </div>
 
-          <p v-if="contactError" class="font-body text-sm text-status-reserved">{{ contactError }}</p>
+          <p v-if="contactError" class="font-body text-sm text-status-reserved">
+            {{ contactError }}
+          </p>
         </div>
 
         <div v-if="offer.type === 'service'" class="rounded-md border border-ink/10 bg-surface p-4">
@@ -200,7 +231,10 @@ watch(() => route.params.id, () => {
             pour réserver.
           </p>
 
-          <p v-else-if="offer.owner && offer.owner.id === authStore.user?.id" class="font-body text-sm text-ink/60">
+          <p
+            v-else-if="offer.owner && offer.owner.id === authStore.user?.id"
+            class="font-body text-sm text-ink/60"
+          >
             C'est ta propre annonce.
           </p>
 
@@ -209,12 +243,17 @@ watch(() => route.params.id, () => {
             class="rounded-md bg-status-active/10 px-4 py-3 text-sm text-status-active"
           >
             Réservation envoyée ! Retrouve-la dans
-            <RouterLink :to="{ name: 'profile' }" class="font-semibold underline">ton profil</RouterLink>.
+            <RouterLink :to="{ name: 'profile' }" class="font-semibold underline"
+              >ton profil</RouterLink
+            >.
           </p>
 
           <form v-else class="flex flex-col gap-3" @submit.prevent="submitReservation">
             <div>
-              <label for="scheduled" class="mb-1 block font-mono text-xs tracking-wide text-ink/60 uppercase">
+              <label
+                for="scheduled"
+                class="mb-1 block font-mono text-xs tracking-wide text-ink/60 uppercase"
+              >
                 Date et heure
               </label>
               <input
@@ -228,7 +267,10 @@ watch(() => route.params.id, () => {
             </div>
 
             <div>
-              <label for="resa-notes" class="mb-1 block font-mono text-xs tracking-wide text-ink/60 uppercase">
+              <label
+                for="resa-notes"
+                class="mb-1 block font-mono text-xs tracking-wide text-ink/60 uppercase"
+              >
                 Notes (optionnel)
               </label>
               <textarea
@@ -239,7 +281,10 @@ watch(() => route.params.id, () => {
               ></textarea>
             </div>
 
-            <p v-if="bookingError" class="rounded-md bg-status-reserved/10 px-3 py-2 text-sm text-status-reserved">
+            <p
+              v-if="bookingError"
+              class="rounded-md bg-status-reserved/10 px-3 py-2 text-sm text-status-reserved"
+            >
               {{ bookingError }}
             </p>
 

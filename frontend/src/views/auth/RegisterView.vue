@@ -15,6 +15,8 @@ const error = ref('')
 const loading = ref(false)
 
 async function handleRegister() {
+  if (loading.value) return
+
   error.value = ''
   loading.value = true
 
@@ -25,7 +27,7 @@ async function handleRegister() {
       name: 'home',
     })
   } catch (err) {
-    error.value = extractErrorMessage(err, "Impossible de créer le compte.")
+    error.value = extractErrorMessage(err, 'Impossible de créer le compte.')
   } finally {
     loading.value = false
   }
@@ -41,7 +43,10 @@ async function handleRegister() {
 
       <form class="space-y-5" @submit.prevent="handleRegister">
         <div>
-          <label for="name" class="mb-2 block font-mono text-xs tracking-wide text-ink/60 uppercase">
+          <label
+            for="name"
+            class="mb-2 block font-mono text-xs tracking-wide text-ink/60 uppercase"
+          >
             Nom
           </label>
 
@@ -51,13 +56,17 @@ async function handleRegister() {
             type="text"
             autocomplete="name"
             required
+            :disabled="loading"
             placeholder="Sara L."
             class="w-full rounded-lg border border-ink/15 bg-ground px-4 py-3 font-body outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
           />
         </div>
 
         <div>
-          <label for="email" class="mb-2 block font-mono text-xs tracking-wide text-ink/60 uppercase">
+          <label
+            for="email"
+            class="mb-2 block font-mono text-xs tracking-wide text-ink/60 uppercase"
+          >
             Email
           </label>
 
@@ -67,13 +76,17 @@ async function handleRegister() {
             type="email"
             autocomplete="email"
             required
+            :disabled="loading"
             placeholder="toi@example.com"
             class="w-full rounded-lg border border-ink/15 bg-ground px-4 py-3 font-body outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
           />
         </div>
 
         <div>
-          <label for="password" class="mb-2 block font-mono text-xs tracking-wide text-ink/60 uppercase">
+          <label
+            for="password"
+            class="mb-2 block font-mono text-xs tracking-wide text-ink/60 uppercase"
+          >
             Mot de passe
           </label>
 
@@ -84,6 +97,7 @@ async function handleRegister() {
             autocomplete="new-password"
             required
             minlength="8"
+            :disabled="loading"
             placeholder="8 caractères minimum"
             class="w-full rounded-lg border border-ink/15 bg-ground px-4 py-3 font-body outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
           />
@@ -104,12 +118,17 @@ async function handleRegister() {
             autocomplete="new-password"
             required
             minlength="8"
+            :disabled="loading"
             placeholder="••••••••"
             class="w-full rounded-lg border border-ink/15 bg-ground px-4 py-3 font-body outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
           />
         </div>
 
-        <p v-if="error" class="rounded-lg bg-status-reserved/10 px-4 py-3 text-sm text-status-reserved">
+        <p
+          v-if="error"
+          class="rounded-lg bg-status-reserved/10 px-4 py-3 text-sm text-status-reserved"
+          role="alert"
+        >
           {{ error }}
         </p>
 
@@ -118,7 +137,7 @@ async function handleRegister() {
           :disabled="loading"
           class="w-full rounded-lg bg-accent px-4 py-3 font-semibold text-ink transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {{ loading ? 'Création…' : 'Créer mon compte' }}
+          {{ loading ? 'Création…' : error ? 'Réessayer' : 'Créer mon compte' }}
         </button>
 
         <p class="text-center text-sm text-ink/60">
