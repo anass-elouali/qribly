@@ -77,6 +77,111 @@ class ReservationTest extends TestCase
         $this->assertNotNull($reservation);
         $this->assertSame('pending', $reservation->status);
     }
+
+    public function test_reservation_time_with_an_offset_is_stored_in_utc(): void
+    {
+        $customer = User::factory()->create();
+        $provider = User::factory()->create();
+        $offer = $this->createOffer($provider);
+        $scheduledAt = now()->addDay()->startOfMinute()->setTimezone('Africa/Casablanca');
+
+        $this
+            ->actingAs($customer)
+            ->postJson("/api/offers/{$offer->id}/reservations", [
+                'scheduled_at' => $scheduledAt->toIso8601String(),
+            ])
+            ->assertCreated();
+
+        $this->assertDatabaseHas('reservations', [
+            'offer_id' => $offer->id,
+            'scheduled_at' => $scheduledAt->copy()->utc()->format('Y-m-d H:i:s'),
+        ]);
+    }
+
+    public function test_user_cannot_reserve_their_own_offer(): void
+    {
+        $provider = User::factory()->create();
+        $offer = $this->createOffer($provider);
+
+        $this
+            ->actingAs($provider)
+            ->postJson("/api/offers/{$offer->id}/reservations", [
+                'scheduled_at' => now()->addDay()->toIso8601String(),
+            ])
+            ->assertForbidden();
+
+        $this->assertDatabaseCount('reservations', 0);
+    }
+
+    public function test_inactive_offer_cannot_be_reserved(): void
+    {
+        $customer = User::factory()->create();
+        $provider = User::factory()->create();
+        $offer = $this->createOffer($provider);
+        $offer->update(['status' => 'inactive']);
+
+        $this
+            ->actingAs($customer)
+            ->postJson("/api/offers/{$offer->id}/reservations", [
+                'scheduled_at' => now()->addDay()->toIso8601String(),
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('offer');
+
+        $this->assertDatabaseCount('reservations', 0);
+    }
+
+    public function test_occupied_slot_cannot_be_reserved_twice(): void
+    {
+        $firstCustomer = User::factory()->create();
+        $secondCustomer = User::factory()->create();
+        $provider = User::factory()->create();
+        $offer = $this->createOffer($provider);
+        $scheduledAt = now()->addDay()->startOfMinute();
+
+        Reservation::create([
+            'user_id' => $firstCustomer->id,
+            'offer_id' => $offer->id,
+            'scheduled_at' => $scheduledAt,
+            'status' => 'pending',
+        ]);
+
+        $this
+            ->actingAs($secondCustomer)
+            ->postJson("/api/offers/{$offer->id}/reservations", [
+                'scheduled_at' => $scheduledAt->toIso8601String(),
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('scheduled_at');
+
+        $this->assertDatabaseCount('reservations', 1);
+    }
+
+    public function test_cancelled_slot_can_be_reserved_again(): void
+    {
+        $firstCustomer = User::factory()->create();
+        $secondCustomer = User::factory()->create();
+        $provider = User::factory()->create();
+        $offer = $this->createOffer($provider);
+        $scheduledAt = now()->addDay()->startOfMinute();
+
+        Reservation::create([
+            'user_id' => $firstCustomer->id,
+            'offer_id' => $offer->id,
+            'scheduled_at' => $scheduledAt,
+            'status' => 'cancelled',
+        ]);
+
+        $this
+            ->actingAs($secondCustomer)
+            ->postJson("/api/offers/{$offer->id}/reservations", [
+                'scheduled_at' => $scheduledAt->toIso8601String(),
+            ])
+            ->assertCreated();
+
+        $this->assertDatabaseCount('reservations', 2);
+    }
+
     public function test_provider_can_confirm_a_pending_reservation(): void
     {
         $customer = User::factory()->create();
@@ -102,6 +207,7 @@ class ReservationTest extends TestCase
             'status' => 'confirmed',
         ]);
     }
+
     public function test_provider_can_cancel_a_pending_reservation(): void
     {
         $customer = User::factory()->create();
@@ -128,6 +234,7 @@ class ReservationTest extends TestCase
             'cancelled_by' => $provider->id,
         ]);
     }
+
     public function test_provider_can_complete_a_confirmed_reservation(): void
     {
         $customer = User::factory()->create();
@@ -153,6 +260,7 @@ class ReservationTest extends TestCase
             'status' => 'completed',
         ]);
     }
+
     public function test_other_provider_cannot_confirm_a_reservation(): void
     {
         $customer = User::factory()->create();
@@ -179,5 +287,4 @@ class ReservationTest extends TestCase
             'status' => 'pending',
         ]);
     }
- 
 }

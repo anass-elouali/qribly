@@ -3,22 +3,23 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreReservationRequest;
-use App\Models\Offer;
 use App\Http\Resources\ReservationResource;
+use App\Models\Offer;
 use App\Models\Reservation;
-use Illuminate\Http\Request;
-use App\Notifications\ReservationCreated;
-use App\Notifications\ReservationConfirmed;
 use App\Notifications\ReservationCancelled;
 use App\Notifications\ReservationCompleted;
-
+use App\Notifications\ReservationConfirmed;
+use App\Notifications\ReservationCreated;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class ReservationController extends Controller
 {
-
-    public function index(Request $request) {
+    public function index(Request $request)
+    {
         $reservations = $request->user()
-          ->reservations()
+            ->reservations()
             ->with(['offer', 'review'])
             ->latest('scheduled_at')
             ->paginate(15);
@@ -26,25 +27,56 @@ class ReservationController extends Controller
         return ReservationResource::collection($reservations);
     }
 
-
     public function store(
         StoreReservationRequest $request,
         Offer $offer
     ) {
         if ($offer->type !== 'service') {
             return response()->json([
-                'message' => 'Only service offers can be reserved.',
+                'message' => 'Seules les annonces de service peuvent être réservées.',
             ], 422);
         }
 
-        $reservation = $request->user()
-            ->reservations()
-            ->create([
-                'offer_id' => $offer->id,
-                'scheduled_at' => $request->validated('scheduled_at'),
-                'notes' => $request->validated('notes'),
-                'status' => 'pending',
-            ]);
+        if ($offer->user_id === $request->user()->id) {
+            return response()->json([
+                'message' => 'Tu ne peux pas réserver ta propre annonce.',
+            ], 403);
+        }
+
+        $scheduledAt = $request->date('scheduled_at')->utc();
+
+        $reservation = DB::transaction(function () use ($request, $offer, $scheduledAt) {
+            $lockedOffer = Offer::query()
+                ->lockForUpdate()
+                ->findOrFail($offer->id);
+
+            if ($lockedOffer->status !== 'active') {
+                throw ValidationException::withMessages([
+                    'offer' => "Cette annonce n'est pas disponible à la réservation.",
+                ]);
+            }
+
+            $slotAlreadyBooked = $lockedOffer
+                ->reservations()
+                ->where('scheduled_at', $scheduledAt)
+                ->whereIn('status', ['pending', 'confirmed'])
+                ->exists();
+
+            if ($slotAlreadyBooked) {
+                throw ValidationException::withMessages([
+                    'scheduled_at' => 'Ce créneau vient d’être réservé. Choisis une autre heure.',
+                ]);
+            }
+
+            return $request->user()
+                ->reservations()
+                ->create([
+                    'offer_id' => $lockedOffer->id,
+                    'scheduled_at' => $scheduledAt,
+                    'notes' => $request->validated('notes'),
+                    'status' => 'pending',
+                ]);
+        });
 
         $reservation->load([
             'user',
@@ -52,7 +84,7 @@ class ReservationController extends Controller
         ]);
 
         $offer->load('user');
-        
+
         $offer->user->notify(
             new ReservationCreated($reservation)
         );
@@ -70,7 +102,7 @@ class ReservationController extends Controller
             ], 403);
         }
 
-        if (!in_array($reservation->status, ['pending', 'confirmed'])) {
+        if (! in_array($reservation->status, ['pending', 'confirmed'])) {
             return response()->json([
                 'message' => 'This reservation cannot be cancelled.',
             ], 422);
@@ -85,7 +117,6 @@ class ReservationController extends Controller
         $reservation->offer->user->notify(
             new ReservationCancelled($reservation)
         );
-
 
         return response()->json([
             'message' => 'Reservation cancelled successfully.',
@@ -148,7 +179,7 @@ class ReservationController extends Controller
     ) {
         $this->authorize('cancel', $reservation);
 
-        if (!in_array($reservation->status, ['pending', 'confirmed'])) {
+        if (! in_array($reservation->status, ['pending', 'confirmed'])) {
             return response()->json([
                 'message' => 'This reservation cannot be cancelled.',
             ], 422);
@@ -167,14 +198,14 @@ class ReservationController extends Controller
 
         $reservation->user->notify(
             new ReservationCancelled($reservation)
-        ); 
+        );
 
         return new ReservationResource($reservation);
     }
 
     public function providerComplete(
-    Request $request,
-    Reservation $reservation
+        Request $request,
+        Reservation $reservation
     ) {
         $this->authorize('complete', $reservation);
 

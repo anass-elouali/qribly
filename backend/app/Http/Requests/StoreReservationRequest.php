@@ -23,7 +23,7 @@ class StoreReservationRequest extends FormRequest
     public function rules(): array
     {
         return [
-             'scheduled_at' => [
+            'scheduled_at' => [
                 'required',
                 'date',
                 'after:now',
@@ -34,6 +34,19 @@ class StoreReservationRequest extends FormRequest
                 'string',
                 'max:1000',
             ],
+        ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function messages(): array
+    {
+        return [
+            'scheduled_at.required' => 'Choisis une date et une heure pour la réservation.',
+            'scheduled_at.date' => 'La date de réservation est invalide.',
+            'scheduled_at.after' => 'Choisis une date et une heure à venir.',
+            'notes.max' => 'Les notes ne peuvent pas dépasser 1000 caractères.',
         ];
     }
 }

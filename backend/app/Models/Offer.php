@@ -5,7 +5,6 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use App\Models\Reservation;
 
 class Offer extends Model
 {
@@ -30,7 +29,7 @@ class Offer extends Model
         return $this->belongsTo(Category::class);
     }
 
-     public function scopeWithLocationCoordinates($query)
+    public function scopeWithLocationCoordinates($query)
     {
         return $query
             ->select('offers.*')
@@ -48,9 +47,14 @@ class Offer extends Model
         return $this->belongsToMany(User::class, 'favorites')
             ->withTimestamps();
     }
-    
+
     public function reviews()
     {
         return $this->hasMany(Review::class);
+    }
+
+    public function reservations(): HasMany
+    {
+        return $this->hasMany(Reservation::class);
     }
 }
