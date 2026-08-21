@@ -153,10 +153,15 @@ watch(
     props.modelValue.latitude,
     props.modelValue.longitude,
   ],
-  ([latitude, longitude]) => {
+  () => {
+    const latitude = props.modelValue.latitude
+    const longitude = props.modelValue.longitude
+
     if (
       latitude === null ||
+      latitude === undefined ||
       longitude === null ||
+      longitude === undefined ||
       !map
     ) {
       return
