@@ -46,6 +46,9 @@ const providerReservations = ref<Reservation[]>([])
 const loading = ref(false)
 const actionLoading = ref(false)
 const error = ref('')
+const cancellingReservationId = ref<number | null>(null)
+const reservationActionError = ref('')
+const reservationActionSuccess = ref('')
 
 const loadedTabs = reactive(new Set<Tab>())
 
@@ -132,6 +135,8 @@ async function preloadRemainingCounts() {
 function selectTab(tab: Tab) {
   activeTab.value = tab
   error.value = ''
+  reservationActionError.value = ''
+  reservationActionSuccess.value = ''
   loadTab(tab)
 }
 
@@ -193,15 +198,32 @@ async function removeFavorite(id: number) {
 */
 
 async function cancelReservation(id: number) {
-  await runProfileAction(async () => {
+  if (cancellingReservationId.value !== null) {
+    return
+  }
+
+  const reservation = reservations.value.find((item) => item.id === id)
+
+  if (!reservation || !['pending', 'confirmed'].includes(reservation.status)) {
+    return
+  }
+
+  cancellingReservationId.value = id
+  reservationActionError.value = ''
+  reservationActionSuccess.value = ''
+
+  try {
     await api.patch(`/reservations/${id}/cancel`)
-
-    const reservation = reservations.value.find((reservation) => reservation.id === id)
-
-    if (reservation) {
-      reservation.status = 'cancelled'
-    }
-  }, "Impossible d'annuler cette réservation.")
+    reservation.status = 'cancelled'
+    reservationActionSuccess.value = `La réservation pour « ${reservation.offer?.title ?? 'ce service'} » a été annulée.`
+  } catch (exception) {
+    reservationActionError.value = extractErrorMessage(
+      exception,
+      "Impossible d'annuler cette réservation.",
+    )
+  } finally {
+    cancellingReservationId.value = null
+  }
 }
 
 function handleReviewSubmitted(
@@ -314,6 +336,9 @@ onMounted(() => {
       <ProfileReservations
         v-else-if="activeTab === 'reservations'"
         :reservations="reservations"
+        :cancelling-id="cancellingReservationId"
+        :action-error="reservationActionError"
+        :action-success="reservationActionSuccess"
         @cancel="cancelReservation"
         @review-submitted="handleReviewSubmitted"
       />

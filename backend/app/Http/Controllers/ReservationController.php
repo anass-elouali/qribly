@@ -98,13 +98,13 @@ class ReservationController extends Controller
     {
         if ($reservation->user_id !== $request->user()->id) {
             return response()->json([
-                'message' => 'You are not allowed to cancel this reservation.',
+                'message' => 'Tu ne peux pas annuler cette réservation.',
             ], 403);
         }
 
         if (! in_array($reservation->status, ['pending', 'confirmed'])) {
             return response()->json([
-                'message' => 'This reservation cannot be cancelled.',
+                'message' => 'Cette réservation ne peut plus être annulée.',
             ], 422);
         }
 
@@ -119,7 +119,7 @@ class ReservationController extends Controller
         );
 
         return response()->json([
-            'message' => 'Reservation cancelled successfully.',
+            'message' => 'Réservation annulée.',
             'reservation' => [
                 'id' => $reservation->id,
                 'status' => $reservation->status,
