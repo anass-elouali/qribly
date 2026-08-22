@@ -153,7 +153,7 @@ class ReservationController extends Controller
 
         if ($reservation->status !== 'pending') {
             return response()->json([
-                'message' => 'Only pending reservations can be confirmed.',
+                'message' => 'Seules les réservations en attente peuvent être confirmées.',
             ], 422);
         }
 
@@ -181,7 +181,7 @@ class ReservationController extends Controller
 
         if (! in_array($reservation->status, ['pending', 'confirmed'])) {
             return response()->json([
-                'message' => 'This reservation cannot be cancelled.',
+                'message' => 'Cette réservation ne peut plus être annulée.',
             ], 422);
         }
 
@@ -211,7 +211,7 @@ class ReservationController extends Controller
 
         if ($reservation->status !== 'confirmed') {
             return response()->json([
-                'message' => 'Only confirmed reservations can be completed.',
+                'message' => 'Seules les réservations confirmées peuvent être terminées.',
             ], 422);
         }
 

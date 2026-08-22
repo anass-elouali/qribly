@@ -17,7 +17,7 @@ import OfferGridSkeleton from '@/components/offers/OfferGridSkeleton.vue'
 import AsyncStatePanel from '@/components/ui/AsyncStatePanel.vue'
 
 import type { Offer, PaginatedResponse } from '@/types/offer'
-import type { Reservation } from '@/types/reservation'
+import type { ProviderReservationAction, Reservation } from '@/types/reservation'
 
 const route = useRoute()
 const authStore = useAuthStore()
@@ -49,6 +49,12 @@ const error = ref('')
 const cancellingReservationId = ref<number | null>(null)
 const reservationActionError = ref('')
 const reservationActionSuccess = ref('')
+const providerActiveAction = ref<{
+  id: number
+  action: ProviderReservationAction
+} | null>(null)
+const providerActionError = ref('')
+const providerActionSuccess = ref('')
 
 const loadedTabs = reactive(new Set<Tab>())
 
@@ -137,6 +143,8 @@ function selectTab(tab: Tab) {
   error.value = ''
   reservationActionError.value = ''
   reservationActionSuccess.value = ''
+  providerActionError.value = ''
+  providerActionSuccess.value = ''
   loadTab(tab)
 }
 
@@ -239,28 +247,60 @@ function handleReviewSubmitted(
 |--------------------------------------------------------------------------
 */
 
-async function providerAction(id: number, action: 'confirm' | 'cancel' | 'complete') {
-  await runProfileAction(async () => {
+function clearProviderFeedback() {
+  providerActionError.value = ''
+  providerActionSuccess.value = ''
+}
+
+async function providerAction(id: number, action: ProviderReservationAction) {
+  if (providerActiveAction.value) {
+    return
+  }
+
+  const reservation = providerReservations.value.find((item) => item.id === id)
+  const allowedStatuses: Record<ProviderReservationAction, Reservation['status'][]> = {
+    confirm: ['pending'],
+    cancel: ['pending', 'confirmed'],
+    complete: ['confirmed'],
+  }
+
+  if (!reservation || !allowedStatuses[action].includes(reservation.status)) {
+    providerActionError.value =
+      'Le statut de cette réservation ne permet plus cette action. Actualise la page puis réessaie.'
+    return
+  }
+
+  providerActiveAction.value = { id, action }
+  clearProviderFeedback()
+
+  try {
     await api.patch(`/provider/reservations/${id}/${action}`)
 
-    const reservation = providerReservations.value.find((reservation) => reservation.id === id)
-
-    if (!reservation) {
-      return
+    const nextStatus: Record<ProviderReservationAction, Reservation['status']> = {
+      confirm: 'confirmed',
+      cancel: 'cancelled',
+      complete: 'completed',
     }
+    reservation.status = nextStatus[action]
 
-    if (action === 'confirm') {
-      reservation.status = 'confirmed'
+    const customer = reservation.user?.name ?? 'Le client'
+    const service = reservation.offer?.title ?? 'ce service'
+    const successMessages: Record<ProviderReservationAction, string> = {
+      confirm: `La réservation de ${customer} pour « ${service} » est confirmée.`,
+      cancel: `La réservation de ${customer} pour « ${service} » a été annulée.`,
+      complete: `Le service « ${service} » pour ${customer} est marqué comme terminé.`,
     }
-
-    if (action === 'complete') {
-      reservation.status = 'completed'
+    providerActionSuccess.value = successMessages[action]
+  } catch (exception) {
+    const fallbackMessages: Record<ProviderReservationAction, string> = {
+      confirm: 'Impossible de confirmer cette réservation.',
+      cancel: "Impossible d'annuler cette réservation.",
+      complete: 'Impossible de terminer cette réservation.',
     }
-
-    if (action === 'cancel') {
-      reservation.status = 'cancelled'
-    }
-  }, 'Impossible de mettre à jour cette réservation.')
+    providerActionError.value = extractErrorMessage(exception, fallbackMessages[action])
+  } finally {
+    providerActiveAction.value = null
+  }
 }
 
 /*
@@ -346,9 +386,11 @@ onMounted(() => {
       <ProfileProviderReservations
         v-else
         :reservations="providerReservations"
-        @confirm="providerAction($event, 'confirm')"
-        @cancel="providerAction($event, 'cancel')"
-        @complete="providerAction($event, 'complete')"
+        :active-action="providerActiveAction"
+        :action-error="providerActionError"
+        :action-success="providerActionSuccess"
+        @action="providerAction"
+        @clear-feedback="clearProviderFeedback"
       />
     </div>
   </div>

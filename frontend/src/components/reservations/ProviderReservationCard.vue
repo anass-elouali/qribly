@@ -1,14 +1,13 @@
 <script setup lang="ts">
 import dayjs from 'dayjs'
-import type { Reservation } from '@/types/reservation'
-import {
-  reservationStatusLabel,
-  reservationStatusColor,
-} from '@/utils/reservation'
+import type { ProviderReservationAction, Reservation } from '@/types/reservation'
+import { reservationStatusLabel, reservationStatusColor } from '@/utils/reservation'
 import { initials } from '@/utils/user'
 
 defineProps<{
   reservation: Reservation
+  activeAction?: ProviderReservationAction | null
+  contacting?: boolean
 }>()
 
 defineEmits<{
@@ -23,6 +22,7 @@ defineEmits<{
 <template>
   <article
     class="rounded-xl border border-ink/10 bg-surface p-5 transition hover:border-ink/20"
+    :aria-busy="Boolean(activeAction)"
   >
     <!-- ========================================================= -->
     <!-- CUSTOMER HEADER                                           -->
@@ -59,38 +59,23 @@ defineEmits<{
     <!-- RESERVATION INFORMATION                                    -->
     <!-- ========================================================= -->
 
-    <div
-      class="mt-5 grid gap-4 border-t border-ink/10 pt-4 sm:grid-cols-2"
-    >
+    <div class="mt-5 grid gap-4 border-t border-ink/10 pt-4 sm:grid-cols-2">
       <!-- Service -->
       <div>
-        <p
-          class="font-mono text-[0.65rem] tracking-wide text-ink/40 uppercase"
-        >
-          Service
-        </p>
+        <p class="font-mono text-[0.65rem] tracking-wide text-ink/40 uppercase">Service</p>
 
-        <p
-          class="mt-1 truncate font-body font-semibold text-ink"
-        >
+        <p class="mt-1 truncate font-body font-semibold text-ink">
           {{ reservation.offer?.title ?? 'Annonce supprimée' }}
         </p>
 
-        <p
-          v-if="reservation.offer?.price"
-          class="mt-0.5 font-mono text-xs text-ink/50"
-        >
+        <p v-if="reservation.offer?.price" class="mt-0.5 font-mono text-xs text-ink/50">
           {{ reservation.offer.price }} DH
         </p>
       </div>
 
       <!-- Appointment -->
       <div>
-        <p
-          class="font-mono text-[0.65rem] tracking-wide text-ink/40 uppercase"
-        >
-          Rendez-vous
-        </p>
+        <p class="font-mono text-[0.65rem] tracking-wide text-ink/40 uppercase">Rendez-vous</p>
 
         <p class="mt-1 font-body font-semibold text-ink">
           {{ dayjs(reservation.scheduled_at).format('DD MMM YYYY') }}
@@ -106,15 +91,8 @@ defineEmits<{
     <!-- NOTES                                                      -->
     <!-- ========================================================= -->
 
-    <div
-      v-if="reservation.notes"
-      class="mt-4 rounded-lg bg-ink/[0.03] px-3.5 py-3"
-    >
-      <p
-        class="mb-1 font-mono text-[0.6rem] tracking-wide text-ink/40 uppercase"
-      >
-        Note du client
-      </p>
+    <div v-if="reservation.notes" class="mt-4 rounded-lg bg-ink/[0.03] px-3.5 py-3">
+      <p class="mb-1 font-mono text-[0.6rem] tracking-wide text-ink/40 uppercase">Note du client</p>
 
       <p class="font-body text-sm leading-relaxed text-ink/70">
         {{ reservation.notes }}
@@ -125,9 +103,7 @@ defineEmits<{
     <!-- META                                                       -->
     <!-- ========================================================= -->
 
-    <div
-      class="mt-4 flex items-center justify-between border-t border-ink/10 pt-3"
-    >
+    <div class="mt-4 flex items-center justify-between border-t border-ink/10 pt-3">
       <p class="font-mono text-[0.6rem] text-ink/35">
         Demandée
         {{ dayjs(reservation.created_at).format('DD/MM/YYYY HH:mm') }}
@@ -135,7 +111,8 @@ defineEmits<{
 
       <button
         type="button"
-        class="font-mono text-xs tracking-wide text-primary uppercase transition hover:opacity-70"
+        class="font-mono text-xs tracking-wide text-primary uppercase transition hover:opacity-70 disabled:cursor-wait disabled:opacity-50"
+        :disabled="Boolean(activeAction)"
         @click="$emit('view', reservation)"
       >
         Voir les détails →
@@ -153,53 +130,50 @@ defineEmits<{
       <!-- Message -->
       <button
         type="button"
-        class="rounded-md border border-ink/15 px-3 py-1.5 font-mono text-xs text-ink/70 transition hover:border-primary hover:text-primary"
+        class="rounded-md border border-ink/15 px-3 py-1.5 font-mono text-xs text-ink/70 transition hover:border-primary hover:text-primary disabled:cursor-wait disabled:opacity-50"
+        :disabled="Boolean(activeAction) || contacting"
         @click="$emit('message', reservation.user?.id ?? 0)"
       >
-        Contacter le client
+        {{ contacting ? 'Ouverture…' : 'Contacter le client' }}
       </button>
 
       <!-- Confirm -->
       <button
         v-if="reservation.status === 'pending'"
         type="button"
-        class="rounded-md border border-status-active px-3 py-1.5 font-mono text-xs text-status-active transition hover:bg-status-active/10"
+        class="rounded-md border border-status-active px-3 py-1.5 font-mono text-xs text-status-active transition hover:bg-status-active/10 disabled:cursor-wait disabled:opacity-50"
+        :disabled="Boolean(activeAction) || contacting"
         @click="$emit('confirm', reservation.id)"
       >
-        Confirmer
+        {{ activeAction === 'confirm' ? 'Confirmation…' : 'Confirmer' }}
       </button>
 
       <!-- Complete -->
       <button
         v-if="reservation.status === 'confirmed'"
         type="button"
-        class="rounded-md border border-primary px-3 py-1.5 font-mono text-xs text-primary transition hover:bg-primary/10"
+        class="rounded-md border border-primary px-3 py-1.5 font-mono text-xs text-primary transition hover:bg-primary/10 disabled:cursor-wait disabled:opacity-50"
+        :disabled="Boolean(activeAction) || contacting"
         @click="$emit('complete', reservation.id)"
       >
-        Marquer comme terminée
+        {{ activeAction === 'complete' ? 'Finalisation…' : 'Marquer comme terminée' }}
       </button>
 
       <!-- Cancel -->
       <button
         type="button"
-        class="rounded-md border border-ink/15 px-3 py-1.5 font-mono text-xs text-status-reserved transition hover:border-status-reserved"
+        class="rounded-md border border-ink/15 px-3 py-1.5 font-mono text-xs text-status-reserved transition hover:border-status-reserved disabled:cursor-wait disabled:opacity-50"
+        :disabled="Boolean(activeAction) || contacting"
         @click="$emit('cancel', reservation.id)"
       >
-        Annuler
+        {{ activeAction === 'cancel' ? 'Annulation…' : 'Annuler' }}
       </button>
     </div>
 
     <!-- Completed -->
-    <div
-      v-else-if="reservation.status === 'completed'"
-      class="mt-4 border-t border-ink/10 pt-4"
-    >
-      <div
-        class="flex items-center justify-between rounded-md bg-status-active/5 px-3 py-2"
-      >
-        <p class="font-mono text-xs text-status-active">
-          Service terminé
-        </p>
+    <div v-else-if="reservation.status === 'completed'" class="mt-4 border-t border-ink/10 pt-4">
+      <div class="flex items-center justify-between rounded-md bg-status-active/5 px-3 py-2">
+        <p class="font-mono text-xs text-status-active">Service terminé</p>
 
         <button
           type="button"
@@ -212,13 +186,8 @@ defineEmits<{
     </div>
 
     <!-- Cancelled -->
-    <div
-      v-else-if="reservation.status === 'cancelled'"
-      class="mt-4 border-t border-ink/10 pt-4"
-    >
-      <p
-        class="rounded-md bg-status-reserved/5 px-3 py-2 font-mono text-xs text-status-reserved"
-      >
+    <div v-else-if="reservation.status === 'cancelled'" class="mt-4 border-t border-ink/10 pt-4">
+      <p class="rounded-md bg-status-reserved/5 px-3 py-2 font-mono text-xs text-status-reserved">
         Cette réservation a été annulée.
       </p>
     </div>
