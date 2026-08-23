@@ -9,21 +9,18 @@ class CategorySeeder extends Seeder
 {
     public function run(): void
     {
-        $categories = [
-            'Restaurants',
-            'Electronics',
-            'Clothing',
-            'Home Services',
-            'Transportation',
-            'Education',
-            'Beauty',
-            'Groceries',
-        ];
+        foreach (DemoCatalog::CATEGORIES as $legacyName => $frenchName) {
+            $category = Category::query()->where('name', $frenchName)->first();
 
-        foreach ($categories as $name) {
-            Category::firstOrCreate([
-                'name' => $name,
-            ]);
+            if (! $category) {
+                $category = Category::query()->where('name', $legacyName)->first();
+            }
+
+            if ($category) {
+                $category->update(['name' => $frenchName]);
+            } else {
+                Category::create(['name' => $frenchName]);
+            }
         }
     }
 }

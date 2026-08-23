@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
+import { MapPin } from 'lucide-vue-next'
 import type { Category } from '@/types/offer'
 import { statusLabel, statusColor, formatPrice, formatDistance } from '@/utils/offer'
 import { resolveStorageUrl } from '@/utils/url'
@@ -13,6 +14,7 @@ const props = defineProps<{
   status: 'active' | 'reserved' | 'sold' | 'inactive'
   isNegotiable?: boolean
   category?: Category | null
+  city?: string | null
   distance?: number | null
   images?: { id: number; url: string }[]
 }>()
@@ -32,7 +34,12 @@ const thumbnailUrl = computed(() => {
       class="group flex flex-1 flex-col transition-shadow hover:shadow-lg"
     >
       <div class="aspect-[4/3] overflow-hidden bg-primary">
-        <img v-if="thumbnailUrl" :src="thumbnailUrl" :alt="title" class="h-full w-full object-cover" />
+        <img
+          v-if="thumbnailUrl"
+          :src="thumbnailUrl"
+          :alt="title"
+          class="h-full w-full object-cover"
+        />
         <div
           v-else
           class="flex h-full items-center justify-center font-mono text-xs uppercase tracking-wide text-surface/70"
@@ -52,8 +59,14 @@ const thumbnailUrl = computed(() => {
               {{ category.name }}
             </p>
             <p class="font-body font-semibold text-ink">{{ title }}</p>
+            <p v-if="city" class="mt-1 flex items-center gap-1 font-body text-xs text-ink/55">
+              <MapPin :size="13" class="shrink-0 text-primary" aria-hidden="true" />
+              <span>{{ city }}</span>
+            </p>
           </div>
-          <span class="-rotate-2 shrink-0 rounded bg-accent px-2 py-0.5 font-mono text-sm font-bold text-ink">
+          <span
+            class="-rotate-2 shrink-0 rounded bg-accent px-2 py-0.5 font-mono text-sm font-bold text-ink"
+          >
             {{ formatPrice(price) }} DH
           </span>
         </div>

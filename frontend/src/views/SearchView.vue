@@ -570,6 +570,7 @@ onMounted(() => {
             :status="offer.status"
             :is-negotiable="offer.is_negotiable"
             :category="offer.category ?? null"
+            :city="offer.city"
             :images="offer.images"
           />
         </div>

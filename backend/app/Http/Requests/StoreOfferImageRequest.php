@@ -26,10 +26,28 @@ class StoreOfferImageRequest extends FormRequest
             'images' => ['required', 'array', 'min:1'],
             'images.*' => [
                 'required',
-                'image',
+                'file',
                 'mimes:jpg,jpeg,png,webp,avif',
+                'mimetypes:image/jpeg,image/png,image/webp,image/avif',
                 'max:5120',
             ],
+        ];
+    }
+
+    /**
+     * Get the validation error messages for the request.
+     */
+    public function messages(): array
+    {
+        return [
+            'images.required' => 'Ajoutez au moins une photo.',
+            'images.array' => 'Les photos doivent être envoyées sous forme de liste.',
+            'images.min' => 'Ajoutez au moins une photo.',
+            'images.*.required' => 'Chaque photo est obligatoire.',
+            'images.*.file' => 'Chaque photo doit être un fichier valide.',
+            'images.*.mimes' => 'Chaque photo doit être au format JPG, PNG, WEBP ou AVIF.',
+            'images.*.mimetypes' => 'Chaque fichier doit être une image JPG, PNG, WEBP ou AVIF valide.',
+            'images.*.max' => 'Chaque photo ne doit pas dépasser 5 Mo.',
         ];
     }
 }

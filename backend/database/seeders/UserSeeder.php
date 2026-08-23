@@ -10,22 +10,17 @@ class UserSeeder extends Seeder
 {
     public function run(): void
     {
-        $users = [
-            ['name' => 'Youssef Amrani', 'email' => 'youssef@qribly.test'],
-            ['name' => 'Sara Benali', 'email' => 'sara@qribly.test'],
-            ['name' => 'Omar Alaoui', 'email' => 'omar@qribly.test'],
-            ['name' => 'Salma Idrissi', 'email' => 'salma@qribly.test'],
-            ['name' => 'Test User', 'email' => 'test@qribly.test'],
-        ];
-
-        foreach ($users as $user) {
-            User::updateOrCreate(
+        foreach (DemoCatalog::USERS as $user) {
+            $model = User::updateOrCreate(
                 ['email' => $user['email']],
                 [
                     'name' => $user['name'],
-                    'password' => Hash::make('password'),
+                    'password' => Hash::make(DemoCatalog::PASSWORD),
                 ]
             );
+
+            $model->email_verified_at ??= now();
+            $model->save();
         }
     }
 }

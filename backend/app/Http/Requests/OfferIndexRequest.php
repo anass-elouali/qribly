@@ -27,6 +27,12 @@ class OfferIndexRequest extends FormRequest
                 'max:255',
             ],
 
+            'city' => [
+                'nullable',
+                'string',
+                'max:100',
+            ],
+
             'type' => [
                 'nullable',
                 Rule::in(['product', 'service']),
@@ -57,6 +63,13 @@ class OfferIndexRequest extends FormRequest
             'mine' => [
                 'nullable',
                 'boolean',
+            ],
+
+            'per_page' => [
+                'nullable',
+                'integer',
+                'min:1',
+                'max:100',
             ],
         ];
     }

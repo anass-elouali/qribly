@@ -26,6 +26,7 @@ class NearbyOfferRequest extends FormRequest
             'latitude' => ['required', 'numeric', 'between:-90,90'],
             'longitude' => ['required', 'numeric', 'between:-180,180'],
             'radius' => ['required', 'numeric', 'gt:0', 'max:100'],
+            'per_page' => ['sometimes', 'integer', 'between:1,100'],
         ];
     }
 }

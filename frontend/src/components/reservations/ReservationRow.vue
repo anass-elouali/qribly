@@ -1,7 +1,11 @@
 <script setup lang="ts">
 import dayjs from 'dayjs'
 import type { Reservation } from '@/types/reservation'
-import { reservationStatusLabel, reservationStatusColor } from '@/utils/reservation'
+import {
+  formatReservationDuration,
+  reservationStatusColor,
+  reservationStatusLabel,
+} from '@/utils/reservation'
 
 defineProps<{
   reservation: Reservation
@@ -23,6 +27,7 @@ defineProps<{
         <p v-else class="font-body font-semibold text-ink">Annonce supprimée</p>
         <p class="mt-0.5 font-mono text-xs text-ink/50">
           {{ dayjs(reservation.scheduled_at).format('ddd D MMM YYYY [à] HH:mm') }}
+          · {{ formatReservationDuration(reservation.duration_minutes) }}
           <span v-if="personLabel"> · {{ personLabel }}</span>
         </p>
         <p v-if="reservation.offer?.price" class="mt-1 font-mono text-xs font-semibold text-accent">

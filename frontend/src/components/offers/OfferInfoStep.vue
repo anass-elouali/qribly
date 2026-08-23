@@ -11,6 +11,7 @@ export interface OfferInfoData {
   price: string
   isNegotiable: boolean
   status: 'active' | 'reserved' | 'sold' | 'inactive'
+  serviceDurationMinutes: number
 }
 
 const props = defineProps<{
@@ -28,10 +29,7 @@ const form = computed({
   set: (value) => emit('update:modelValue', value),
 })
 
-function update<K extends keyof OfferInfoData>(
-  key: K,
-  value: OfferInfoData[K],
-) {
+function update<K extends keyof OfferInfoData>(key: K, value: OfferInfoData[K]) {
   emit('update:modelValue', {
     ...props.modelValue,
     [key]: value,
@@ -43,7 +41,8 @@ const canContinue = computed(() => {
     props.modelValue.title.trim().length > 0 &&
     props.modelValue.description.trim().length > 0 &&
     props.modelValue.categoryId !== null &&
-    props.modelValue.price !== ''
+    props.modelValue.price !== '' &&
+    (props.modelValue.type !== 'service' || props.modelValue.serviceDurationMinutes >= 15)
   )
 })
 
@@ -60,25 +59,16 @@ function next() {
   <div class="flex flex-col gap-6">
     <!-- Header -->
     <div>
-      <p class="mb-2 font-mono text-xs tracking-widest text-primary uppercase">
-        Étape 1 sur 3
-      </p>
+      <p class="mb-2 font-mono text-xs tracking-widest text-primary uppercase">Étape 1 sur 3</p>
 
-      <h2 class="font-display text-2xl font-bold text-primary">
-        Informations
-      </h2>
+      <h2 class="font-display text-2xl font-bold text-primary">Informations</h2>
 
-      <p class="mt-1 font-body text-sm text-ink/60">
-        Présente ton produit ou ton service.
-      </p>
+      <p class="mt-1 font-body text-sm text-ink/60">Présente ton produit ou ton service.</p>
     </div>
 
     <!-- Title -->
     <div>
-      <label
-        for="title"
-        class="mb-2 block font-mono text-xs tracking-wide text-ink/60 uppercase"
-      >
+      <label for="title" class="mb-2 block font-mono text-xs tracking-wide text-ink/60 uppercase">
         Titre
       </label>
 
@@ -118,25 +108,16 @@ function next() {
             )
           "
         >
-          <option value="" disabled>
-            Choisir une catégorie
-          </option>
+          <option value="" disabled>Choisir une catégorie</option>
 
-          <option
-            v-for="category in categories"
-            :key="category.id"
-            :value="category.id"
-          >
+          <option v-for="category in categories" :key="category.id" :value="category.id">
             {{ category.name }}
           </option>
         </select>
       </div>
 
       <div>
-        <label
-          for="type"
-          class="mb-2 block font-mono text-xs tracking-wide text-ink/60 uppercase"
-        >
+        <label for="type" class="mb-2 block font-mono text-xs tracking-wide text-ink/60 uppercase">
           Type
         </label>
 
@@ -146,29 +127,19 @@ function next() {
           required
           class="w-full rounded-xl border border-ink/15 bg-ground px-4 py-3 font-body outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
           @change="
-            update(
-              'type',
-              ($event.target as HTMLSelectElement).value as 'product' | 'service',
-            )
+            update('type', ($event.target as HTMLSelectElement).value as 'product' | 'service')
           "
         >
-          <option value="product">
-            Produit
-          </option>
+          <option value="product">Produit</option>
 
-          <option value="service">
-            Service
-          </option>
+          <option value="service">Service</option>
         </select>
       </div>
     </div>
 
     <!-- Price -->
     <div>
-      <label
-        for="price"
-        class="mb-2 block font-mono text-xs tracking-wide text-ink/60 uppercase"
-      >
+      <label for="price" class="mb-2 block font-mono text-xs tracking-wide text-ink/60 uppercase">
         Prix
       </label>
 
@@ -185,9 +156,7 @@ function next() {
           @input="update('price', ($event.target as HTMLInputElement).value)"
         />
 
-        <span
-          class="absolute top-1/2 right-4 -translate-y-1/2 font-mono text-xs text-ink/40"
-        >
+        <span class="absolute top-1/2 right-4 -translate-y-1/2 font-mono text-xs text-ink/40">
           DH
         </span>
       </div>
@@ -197,26 +166,48 @@ function next() {
           :checked="form.isNegotiable"
           type="checkbox"
           class="h-4 w-4 accent-primary"
-          @change="
-            update(
-              'isNegotiable',
-              ($event.target as HTMLInputElement).checked,
-            )
-          "
+          @change="update('isNegotiable', ($event.target as HTMLInputElement).checked)"
         />
 
-        <span class="font-body text-sm text-ink">
-          Prix négociable
-        </span>
+        <span class="font-body text-sm text-ink"> Prix négociable </span>
       </label>
+    </div>
+
+    <div v-if="form.type === 'service'">
+      <label
+        for="service-duration"
+        class="mb-2 block font-mono text-xs tracking-wide text-ink/60 uppercase"
+      >
+        Durée du service
+      </label>
+
+      <select
+        id="service-duration"
+        :value="form.serviceDurationMinutes"
+        required
+        class="w-full rounded-xl border border-ink/15 bg-ground px-4 py-3 font-body outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+        @change="
+          update('serviceDurationMinutes', Number(($event.target as HTMLSelectElement).value))
+        "
+      >
+        <option :value="30">30 minutes</option>
+        <option :value="45">45 minutes</option>
+        <option :value="60">1 heure</option>
+        <option :value="90">1 h 30</option>
+        <option :value="120">2 heures</option>
+        <option :value="180">3 heures</option>
+        <option :value="240">4 heures</option>
+      </select>
+
+      <p class="mt-1.5 font-body text-xs text-ink/45">
+        Cette durée sert à calculer les créneaux libres et à éviter les rendez-vous qui se
+        chevauchent.
+      </p>
     </div>
 
     <!-- Status -->
     <div>
-      <label
-        for="status"
-        class="mb-2 block font-mono text-xs tracking-wide text-ink/60 uppercase"
-      >
+      <label for="status" class="mb-2 block font-mono text-xs tracking-wide text-ink/60 uppercase">
         Statut
       </label>
 
@@ -226,17 +217,10 @@ function next() {
         required
         class="w-full rounded-xl border border-ink/15 bg-ground px-4 py-3 font-body outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
         @change="
-          update(
-            'status',
-            ($event.target as HTMLSelectElement).value as OfferInfoData['status'],
-          )
+          update('status', ($event.target as HTMLSelectElement).value as OfferInfoData['status'])
         "
       >
-        <option
-          v-for="(label, value) in statusLabel"
-          :key="value"
-          :value="value"
-        >
+        <option v-for="(label, value) in statusLabel" :key="value" :value="value">
           {{ label }}
         </option>
       </select>
@@ -259,12 +243,7 @@ function next() {
         maxlength="5000"
         placeholder="Décris ton produit ou ton service..."
         class="w-full resize-none rounded-xl border border-ink/15 bg-ground px-4 py-3 font-body outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
-        @input="
-          update(
-            'description',
-            ($event.target as HTMLTextAreaElement).value,
-          )
-        "
+        @input="update('description', ($event.target as HTMLTextAreaElement).value)"
       ></textarea>
     </div>
 

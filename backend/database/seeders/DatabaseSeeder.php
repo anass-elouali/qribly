@@ -12,6 +12,14 @@ class DatabaseSeeder extends Seeder
             UserSeeder::class,
             CategorySeeder::class,
             OfferSeeder::class,
+            OfferImageSeeder::class,
+            ProviderAvailabilitySeeder::class,
+            ReservationSeeder::class,
+            ReviewSeeder::class,
+            FavoriteSeeder::class,
+            ConversationSeeder::class,
+            MessageSeeder::class,
+            NotificationSeeder::class,
         ]);
     }
 }

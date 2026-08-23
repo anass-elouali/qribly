@@ -11,6 +11,8 @@ export interface Offer {
   price: string
   is_negotiable: boolean
   status: 'active' | 'reserved' | 'sold' | 'inactive'
+  service_duration_minutes: number | null
+  city: string | null
   location: { latitude: number; longitude: number } | null
   category?: Category
   owner?: { id: number; name: string }

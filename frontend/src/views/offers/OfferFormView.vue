@@ -71,6 +71,7 @@ const offerInfo = ref<OfferInfoData>({
   price: '',
   isNegotiable: false,
   status: 'active',
+  serviceDurationMinutes: 60,
 })
 
 /*
@@ -95,6 +96,7 @@ const existingImages = ref<
 */
 
 const location = ref<OfferLocationData>({
+  city: null,
   latitude: null,
   longitude: null,
 })
@@ -163,9 +165,11 @@ async function loadOfferForEdit() {
     price: String(offer.price),
     isNegotiable: offer.is_negotiable,
     status: offer.status,
+    serviceDurationMinutes: offer.service_duration_minutes ?? 60,
   }
 
   location.value = {
+    city: offer.city,
     latitude: offer.location?.latitude ?? null,
     longitude: offer.location?.longitude ?? null,
   }
@@ -202,8 +206,12 @@ async function removeExistingImage(imageId: number) {
 async function handleSubmit() {
   error.value = ''
 
-  if (location.value.latitude === null || location.value.longitude === null) {
-    error.value = 'Choisis un emplacement avant de publier.'
+  if (
+    !location.value.city ||
+    location.value.latitude === null ||
+    location.value.longitude === null
+  ) {
+    error.value = 'Choisis une ville et un emplacement avant de publier.'
 
     step.value = 3
 
@@ -234,6 +242,11 @@ async function handleSubmit() {
         is_negotiable: offerInfo.value.isNegotiable,
 
         status: offerInfo.value.status,
+
+        service_duration_minutes:
+          offerInfo.value.type === 'service' ? offerInfo.value.serviceDurationMinutes : null,
+
+        city: location.value.city,
 
         location: {
           latitude: location.value.latitude,
@@ -297,9 +310,15 @@ async function handleSubmit() {
 
     formData.append('status', offerInfo.value.status)
 
+    if (offerInfo.value.type === 'service') {
+      formData.append('service_duration_minutes', String(offerInfo.value.serviceDurationMinutes))
+    }
+
     formData.append('location[latitude]', String(location.value.latitude))
 
     formData.append('location[longitude]', String(location.value.longitude))
+
+    formData.append('city', location.value.city)
 
     images.value.forEach((file) => {
       formData.append('images[]', file)

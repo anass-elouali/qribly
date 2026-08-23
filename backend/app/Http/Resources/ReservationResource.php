@@ -19,6 +19,8 @@ class ReservationResource extends JsonResource
 
             'scheduled_at' => $this->scheduled_at,
 
+            'duration_minutes' => $this->duration_minutes,
+
             'status' => $this->status,
 
             'notes' => $this->notes,
@@ -38,6 +40,7 @@ class ReservationResource extends JsonResource
                     'title' => $this->offer->title,
                     'type' => $this->offer->type,
                     'price' => $this->offer->price,
+                    'service_duration_minutes' => $this->offer->service_duration_minutes,
                 ];
             }),
 

@@ -8,7 +8,7 @@ import { resolveStorageUrl } from '@/utils/url'
 
 const props = defineProps<{
   center: { latitude: number; longitude: number }
-  radiusKm: number
+  radiusKm: number | null
   offers: Offer[]
 }>()
 
@@ -52,6 +52,7 @@ function offerPreviewIcon(offer: Offer) {
     `
 
   const title = escapeHtml(offer.title)
+  const city = offer.city ? escapeHtml(offer.city) : ''
 
   const price = `${formatPrice(offer.price)} DH`
 
@@ -69,14 +70,16 @@ function offerPreviewIcon(offer: Offer) {
             ${title}
           </p>
 
+          ${city ? `<p class="offer-map-card-city">${city}</p>` : ''}
+
           <p class="offer-map-card-price">
             ${escapeHtml(price)}
           </p>
         </div>
       </div>
     `,
-    iconSize: [108, 132],
-    iconAnchor: [54, 132],
+    iconSize: [108, 146],
+    iconAnchor: [54, 146],
   })
 }
 
@@ -100,10 +103,7 @@ function clusterOffers(offers: LocatedOffer[]): LocatedOffer[][] {
 
   const points = offers.map((offer) => ({
     offer,
-    point: map!.latLngToContainerPoint([
-      offer.location.latitude,
-      offer.location.longitude,
-    ]),
+    point: map!.latLngToContainerPoint([offer.location.latitude, offer.location.longitude]),
   }))
 
   const clusters: LocatedOffer[][] = []
@@ -144,9 +144,7 @@ function renderMarkers() {
 
   markersLayer.clearLayers()
 
-  const located = props.offers.filter(
-    (offer): offer is LocatedOffer => offer.location != null,
-  )
+  const located = props.offers.filter((offer): offer is LocatedOffer => offer.location != null)
 
   for (const cluster of clusterOffers(located)) {
     if (cluster.length === 1) {
@@ -154,25 +152,17 @@ function renderMarkers() {
 
       if (!offer) continue
 
-      const marker = L.marker(
-        [
-          offer.location.latitude,
-          offer.location.longitude,
-        ],
-        {
-          icon: offerPreviewIcon(offer),
-          zIndexOffset: 100,
-        },
-      )
+      const marker = L.marker([offer.location.latitude, offer.location.longitude], {
+        icon: offerPreviewIcon(offer),
+        zIndexOffset: 100,
+      })
 
       marker.on('mouseover', () => {
         const element = marker.getElement()
 
         if (!element) return
 
-        const card = element.querySelector(
-          '.offer-map-card',
-        ) as HTMLElement | null
+        const card = element.querySelector('.offer-map-card') as HTMLElement | null
 
         if (!card) return
 
@@ -186,9 +176,7 @@ function renderMarkers() {
 
         if (!element) return
 
-        const card = element.querySelector(
-          '.offer-map-card',
-        ) as HTMLElement | null
+        const card = element.querySelector('.offer-map-card') as HTMLElement | null
 
         if (!card) return
 
@@ -206,17 +194,9 @@ function renderMarkers() {
       continue
     }
 
-    const lat =
-      cluster.reduce(
-        (sum, offer) => sum + offer.location.latitude,
-        0,
-      ) / cluster.length
+    const lat = cluster.reduce((sum, offer) => sum + offer.location.latitude, 0) / cluster.length
 
-    const lng =
-      cluster.reduce(
-        (sum, offer) => sum + offer.location.longitude,
-        0,
-      ) / cluster.length
+    const lng = cluster.reduce((sum, offer) => sum + offer.location.longitude, 0) / cluster.length
 
     const clusterMarker = L.marker([lat, lng], {
       icon: clusterIcon(cluster.length),
@@ -224,51 +204,52 @@ function renderMarkers() {
     })
 
     clusterMarker.on('click', () => {
-      map!.setView(
-        [lat, lng],
-        Math.min(map!.getZoom() + 3, 18),
-        {
-          animate: true,
-        },
-      )
+      map!.setView([lat, lng], Math.min(map!.getZoom() + 3, 18), {
+        animate: true,
+      })
     })
 
     clusterMarker.addTo(markersLayer)
   }
 }
 
+function renderRadius() {
+  if (!map) return
+
+  if (props.radiusKm === null) {
+    radiusCircle?.remove()
+    radiusCircle = null
+    return
+  }
+
+  const center: L.LatLngExpression = [props.center.latitude, props.center.longitude]
+
+  if (radiusCircle) {
+    radiusCircle.setLatLng(center)
+    radiusCircle.setRadius(props.radiusKm * 1000)
+    return
+  }
+
+  radiusCircle = L.circle(center, {
+    radius: props.radiusKm * 1000,
+    color: '#14495A',
+    fillColor: '#14495A',
+    fillOpacity: 0.08,
+    weight: 2,
+  }).addTo(map)
+}
+
 onMounted(() => {
   if (!mapEl.value) return
 
-  map = L.map(mapEl.value).setView(
-    [
-      props.center.latitude,
-      props.center.longitude,
-    ],
-    13,
-  )
+  map = L.map(mapEl.value).setView([props.center.latitude, props.center.longitude], 13)
 
-  L.tileLayer(
-    'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-    {
-      attribution: '&copy; OpenStreetMap contributors',
-      maxZoom: 19,
-    },
-  ).addTo(map)
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; OpenStreetMap contributors',
+    maxZoom: 19,
+  }).addTo(map)
 
-  radiusCircle = L.circle(
-    [
-      props.center.latitude,
-      props.center.longitude,
-    ],
-    {
-      radius: props.radiusKm * 1000,
-      color: '#14495A',
-      fillColor: '#14495A',
-      fillOpacity: 0.08,
-      weight: 2,
-    },
-  ).addTo(map)
+  renderRadius()
 
   markersLayer = L.layerGroup().addTo(map)
 
@@ -286,8 +267,17 @@ watch(
 
 watch(
   () => props.radiusKm,
-  (newRadius) => {
-    radiusCircle?.setRadius(newRadius * 1000)
+  () => renderRadius(),
+)
+
+watch(
+  () => [props.center.latitude, props.center.longitude] as const,
+  () => {
+    if (!map) return
+
+    map.setView([props.center.latitude, props.center.longitude], 13)
+    renderRadius()
+    renderMarkers()
   },
 )
 
@@ -298,10 +288,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div
-    ref="mapEl"
-    class="h-[500px] w-full rounded-md"
-  ></div>
+  <div ref="mapEl" class="h-[500px] w-full overflow-hidden rounded-md [contain:paint]"></div>
 </template>
 
 <style scoped>
@@ -336,9 +323,7 @@ onUnmounted(() => {
 :deep(.offer-map-card.is-hovered) {
   width: 132px;
 
-  transform:
-    translateY(-8px)
-    scale(1.05);
+  transform: translateY(-8px) scale(1.05);
 
   box-shadow:
     0 8px 20px rgb(0 0 0 / 0.2),
@@ -362,11 +347,7 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
 
-  color: color-mix(
-    in srgb,
-    var(--color-surface) 70%,
-    transparent
-  );
+  color: color-mix(in srgb, var(--color-surface) 70%, transparent);
 
   font-family: var(--font-mono);
   font-size: 0.55rem;
@@ -391,6 +372,17 @@ onUnmounted(() => {
 
   line-height: 1.1;
 
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+:deep(.offer-map-card-city) {
+  margin: 3px 0 0;
+  overflow: hidden;
+  color: color-mix(in srgb, var(--color-ink) 55%, transparent);
+  font-family: var(--font-body);
+  font-size: 0.62rem;
+  line-height: 1;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -432,8 +424,7 @@ onUnmounted(() => {
   font-size: 0.75rem;
   font-weight: 700;
 
-  box-shadow:
-    0 3px 8px rgb(0 0 0 / 0.18);
+  box-shadow: 0 3px 8px rgb(0 0 0 / 0.18);
 }
 
 :deep(.leaflet-marker-icon) {

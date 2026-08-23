@@ -17,7 +17,16 @@ class Offer extends Model
         'is_negotiable',
         'status',
         'location',
+        'city',
+        'service_duration_minutes',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'service_duration_minutes' => 'integer',
+        ];
+    }
 
     public function user(): BelongsTo
     {

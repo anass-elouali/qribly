@@ -11,6 +11,7 @@ class Reservation extends Model
         'user_id',
         'offer_id',
         'scheduled_at',
+        'duration_minutes',
         'status',
         'notes',
         'cancelled_at',
@@ -20,13 +21,14 @@ class Reservation extends Model
     protected $casts = [
         'scheduled_at' => 'datetime',
         'cancelled_at' => 'datetime',
+        'duration_minutes' => 'integer',
     ];
 
-    public function user(): BelongsTo 
+    public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
     }
-    
+
     public function offer(): BelongsTo
     {
         return $this->belongsTo(Offer::class);
@@ -41,5 +43,4 @@ class Reservation extends Model
     {
         return $this->hasOne(Review::class);
     }
-
 }

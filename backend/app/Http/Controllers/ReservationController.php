@@ -6,10 +6,12 @@ use App\Http\Requests\StoreReservationRequest;
 use App\Http\Resources\ReservationResource;
 use App\Models\Offer;
 use App\Models\Reservation;
+use App\Models\User;
 use App\Notifications\ReservationCancelled;
 use App\Notifications\ReservationCompleted;
 use App\Notifications\ReservationConfirmed;
 use App\Notifications\ReservationCreated;
+use App\Services\OfferAvailabilityService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -29,7 +31,8 @@ class ReservationController extends Controller
 
     public function store(
         StoreReservationRequest $request,
-        Offer $offer
+        Offer $offer,
+        OfferAvailabilityService $availabilityService,
     ) {
         if ($offer->type !== 'service') {
             return response()->json([
@@ -45,10 +48,17 @@ class ReservationController extends Controller
 
         $scheduledAt = $request->date('scheduled_at')->utc();
 
-        $reservation = DB::transaction(function () use ($request, $offer, $scheduledAt) {
+        $reservation = DB::transaction(function () use (
+            $request,
+            $offer,
+            $scheduledAt,
+            $availabilityService,
+        ) {
             $lockedOffer = Offer::query()
                 ->lockForUpdate()
                 ->findOrFail($offer->id);
+
+            User::query()->lockForUpdate()->findOrFail($lockedOffer->user_id);
 
             if ($lockedOffer->status !== 'active') {
                 throw ValidationException::withMessages([
@@ -56,15 +66,9 @@ class ReservationController extends Controller
                 ]);
             }
 
-            $slotAlreadyBooked = $lockedOffer
-                ->reservations()
-                ->where('scheduled_at', $scheduledAt)
-                ->whereIn('status', ['pending', 'confirmed'])
-                ->exists();
-
-            if ($slotAlreadyBooked) {
+            if (! $availabilityService->isSlotAvailable($lockedOffer, $scheduledAt)) {
                 throw ValidationException::withMessages([
-                    'scheduled_at' => 'Ce créneau vient d’être réservé. Choisis une autre heure.',
+                    'scheduled_at' => "Ce créneau n'est plus disponible. Choisis une autre heure.",
                 ]);
             }
 
@@ -73,6 +77,7 @@ class ReservationController extends Controller
                 ->create([
                     'offer_id' => $lockedOffer->id,
                     'scheduled_at' => $scheduledAt,
+                    'duration_minutes' => $lockedOffer->service_duration_minutes ?: 60,
                     'notes' => $request->validated('notes'),
                     'status' => 'pending',
                 ]);

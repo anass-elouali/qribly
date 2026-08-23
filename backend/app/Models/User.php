@@ -7,13 +7,10 @@ use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
-use Illuminate\Database\Eloquent\Relations\HasMany;
-use App\Models\Offer;
-use App\Models\Reservation;
 use Laravel\Sanctum\HasApiTokens;
-
 
 #[Fillable(['name', 'email', 'password'])]
 #[Hidden(['password', 'remember_token'])]
@@ -46,10 +43,16 @@ class User extends Authenticatable
             ->withTimestamps();
     }
 
-    public function reservations(): HasMany 
+    public function reservations(): HasMany
     {
         return $this->hasMany(Reservation::class);
     }
+
+    public function providerAvailabilities(): HasMany
+    {
+        return $this->hasMany(ProviderAvailability::class);
+    }
+
     public function reviews()
     {
         return $this->hasMany(Review::class);
@@ -59,7 +62,7 @@ class User extends Authenticatable
     {
         return Conversation::where('user_one_id', $this->id)
             ->orWhere('user_two_id', $this->id);
-    }       
+    }
 
     public function messages(): HasMany
     {

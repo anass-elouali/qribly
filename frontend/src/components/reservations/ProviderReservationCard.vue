@@ -1,7 +1,11 @@
 <script setup lang="ts">
 import dayjs from 'dayjs'
 import type { ProviderReservationAction, Reservation } from '@/types/reservation'
-import { reservationStatusLabel, reservationStatusColor } from '@/utils/reservation'
+import {
+  formatReservationDuration,
+  reservationStatusColor,
+  reservationStatusLabel,
+} from '@/utils/reservation'
 import { initials } from '@/utils/user'
 
 defineProps<{
@@ -82,7 +86,8 @@ defineEmits<{
         </p>
 
         <p class="mt-0.5 font-mono text-xs text-ink/50">
-          {{ dayjs(reservation.scheduled_at).format('HH:mm') }}
+          {{ dayjs(reservation.scheduled_at).format('HH:mm') }} ·
+          {{ formatReservationDuration(reservation.duration_minutes) }}
         </p>
       </div>
     </div>

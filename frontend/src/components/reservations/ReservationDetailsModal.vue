@@ -4,7 +4,11 @@ import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { X } from 'lucide-vue-next'
 
 import type { ProviderReservationAction, Reservation } from '@/types/reservation'
-import { reservationStatusLabel, reservationStatusColor } from '@/utils/reservation'
+import {
+  formatReservationDuration,
+  reservationStatusColor,
+  reservationStatusLabel,
+} from '@/utils/reservation'
 import { initials } from '@/utils/user'
 
 const props = defineProps<{
@@ -188,6 +192,10 @@ onBeforeUnmount(() => {
                 </p>
               </div>
             </div>
+
+            <p class="mt-2 font-body text-xs text-ink/50">
+              Durée prévue : {{ formatReservationDuration(reservation.duration_minutes) }}
+            </p>
           </section>
 
           <!-- Status -->

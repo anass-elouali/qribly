@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
-import { SlidersHorizontal, X } from 'lucide-vue-next'
+import { isAxiosError } from 'axios'
+import { ChevronDown, MapPin, SlidersHorizontal, X } from 'lucide-vue-next'
 import api from '@/services/api'
 import { fetchCategories } from '@/services/categories'
 import OfferMap from '@/components/offers/OfferMap.vue'
@@ -9,40 +10,25 @@ import OfferCard from '@/components/offers/OfferCard.vue'
 import OfferGridSkeleton from '@/components/offers/OfferGridSkeleton.vue'
 import RadarOverlay from '@/components/offers/RadarOverlay.vue'
 import AsyncStatePanel from '@/components/ui/AsyncStatePanel.vue'
+import LocationScopeCombobox from '@/components/ui/LocationScopeCombobox.vue'
+import { cityByName, type CityOption } from '@/data/moroccanCities'
 import type { Category, Offer, PaginatedResponse } from '@/types/offer'
 import { extractErrorMessage } from '@/utils/errors'
 import { statusLabel, statusColor, formatPrice, formatDistance } from '@/utils/offer'
+import { resolveStorageUrl } from '@/utils/url'
 
 const router = useRouter()
 
 type ViewMode = 'radar' | 'explorer' | 'immersive'
 type BrowseScope = 'all' | 'nearby' | 'city'
+type CityAreaMode = 'city' | 'surroundings'
 type LocationErrorKind =
   'unsupported' | 'permission-denied' | 'position-unavailable' | 'timeout' | 'unknown'
 
-type CityOption = {
-  name: string
-  latitude: number
-  longitude: number
-}
-
 const viewModes: { value: ViewMode; label: string }[] = [
-  { value: 'radar', label: 'Radar' },
-  { value: 'explorer', label: 'Explorateur' },
-  { value: 'immersive', label: 'Immersif' },
-]
-
-const cityOptions: CityOption[] = [
-  { name: 'Agadir', latitude: 30.4278, longitude: -9.5981 },
-  { name: 'Casablanca', latitude: 33.5731, longitude: -7.5898 },
-  { name: 'Essaouira', latitude: 31.5085, longitude: -9.7595 },
-  { name: 'Fès', latitude: 34.0181, longitude: -5.0078 },
-  { name: 'Marrakech', latitude: 31.6295, longitude: -7.9811 },
-  { name: 'Meknès', latitude: 33.8935, longitude: -5.5473 },
-  { name: 'Oujda', latitude: 34.6814, longitude: -1.9086 },
-  { name: 'Rabat', latitude: 34.0209, longitude: -6.8416 },
-  { name: 'Tanger', latitude: 35.7595, longitude: -5.834 },
-  { name: 'Tétouan', latitude: 35.5889, longitude: -5.3626 },
+  { value: 'radar', label: 'Distances' },
+  { value: 'explorer', label: 'Liste + carte' },
+  { value: 'immersive', label: 'Carte' },
 ]
 
 const viewMode = ref<ViewMode>('explorer')
@@ -50,13 +36,14 @@ const browseScope = ref<BrowseScope>('all')
 
 const searchCenter = ref<{ latitude: number; longitude: number } | null>(null)
 const radiusKm = ref(5)
-const radiusOptions = [1, 5, 10, 25, 50]
+const draftRadiusKm = ref(5)
+const radiusOptions = [5, 10, 25, 50, 100]
 
 const locating = ref(false)
 const locationError = ref<LocationErrorKind | null>(null)
-const cityQuery = ref('')
-const cityError = ref('')
+const selectedCity = ref<CityOption | null>(null)
 const selectedCityName = ref('')
+const cityAreaMode = ref<CityAreaMode>('city')
 
 const categories = ref<Category[]>([])
 const selectedCategory = ref<number | null>(null)
@@ -80,6 +67,39 @@ const offersError = ref('')
 
 let offersRequestId = 0
 let retryOffersRequest: (() => Promise<void>) | null = null
+
+const OFFERS_REQUEST_TIMEOUT_MS = 30_000
+
+function isTransientOffersError(error: unknown) {
+  if (!isAxiosError(error)) return false
+
+  const status = error.response?.status
+
+  return (
+    error.code === 'ECONNABORTED' ||
+    error.code === 'ETIMEDOUT' ||
+    !error.response ||
+    (status !== undefined && status >= 500)
+  )
+}
+
+async function getOffersPage(params: Record<string, string | number>) {
+  const request = () =>
+    api.get<PaginatedResponse<Offer>>('/offers', {
+      params,
+      timeout: OFFERS_REQUEST_TIMEOUT_MS,
+    })
+
+  try {
+    return await request()
+  } catch (error) {
+    if (!isTransientOffersError(error)) throw error
+
+    await new Promise((resolve) => window.setTimeout(resolve, 400))
+
+    return request()
+  }
+}
 
 const searchQuery = ref('')
 
@@ -147,8 +167,78 @@ const filteredOffers = computed(() => {
 
 const canExpandRadius = computed(() => radiusKm.value < radiusOptions[radiusOptions.length - 1]!)
 
-const isLocationScope = computed(() => browseScope.value !== 'all' && searchCenter.value !== null)
-const userPosition = computed(() => (isLocationScope.value ? searchCenter.value : null))
+const isRadiusSearch = computed(
+  () => browseScope.value === 'nearby' || cityAreaMode.value === 'surroundings',
+)
+
+const locationSelectionKey = computed(() => {
+  if (locating.value || browseScope.value === 'nearby') return 'nearby'
+
+  if (browseScope.value === 'city' && selectedCity.value) {
+    return `city:${selectedCity.value.name}`
+  }
+
+  return 'all'
+})
+
+const availableViewModes = computed(() => {
+  if (browseScope.value === 'all') return []
+
+  if (browseScope.value === 'city') {
+    return cityAreaMode.value === 'surroundings'
+      ? viewModes
+      : viewModes.filter((mode) => mode.value !== 'radar')
+  }
+
+  return viewModes
+})
+
+const searchPlaceholder = computed(() => {
+  if (browseScope.value === 'city' && selectedCityName.value) {
+    return cityAreaMode.value === 'surroundings'
+      ? `Rechercher à ${selectedCityName.value} et aux alentours…`
+      : `Rechercher à ${selectedCityName.value}…`
+  }
+
+  if (browseScope.value === 'nearby') {
+    return 'Rechercher autour de ta position…'
+  }
+
+  return 'Rechercher parmi toutes les annonces…'
+})
+
+const resultsSummary = computed(() => {
+  let summary = `${filteredOffers.value.length} annonce(s)`
+
+  if (browseScope.value === 'city' && selectedCityName.value) {
+    summary +=
+      cityAreaMode.value === 'surroundings'
+        ? ` à moins de ${radiusKm.value} km de ${selectedCityName.value}`
+        : ` à ${selectedCityName.value}`
+  } else if (browseScope.value === 'nearby') {
+    summary += ` autour de ta position dans un rayon de ${radiusKm.value} km`
+  } else {
+    summary += ' partout au Maroc'
+  }
+
+  const query = searchQuery.value.trim()
+
+  return query ? `${summary} pour « ${query} »` : summary
+})
+
+const mapRadiusKm = computed(() => (isRadiusSearch.value ? radiusKm.value : null))
+
+const locationContextLabel = computed(() =>
+  browseScope.value === 'city' && selectedCityName.value
+    ? cityAreaMode.value === 'surroundings'
+      ? `${selectedCityName.value} et alentours`
+      : `À ${selectedCityName.value}`
+    : 'Autour de toi',
+)
+
+const radiusDraftChanged = computed(
+  () => isRadiusSearch.value && draftRadiusKm.value !== radiusKm.value,
+)
 
 const hasActiveFilters = computed(
   () =>
@@ -245,6 +335,36 @@ const priceFilterLabel = computed(() => {
   return 'Prix'
 })
 
+type AppliedFilterKey = 'category' | 'type' | 'status' | 'price'
+
+const appliedFilterChips = computed<{ key: AppliedFilterKey; label: string }[]>(() => {
+  const chips: { key: AppliedFilterKey; label: string }[] = []
+
+  if (selectedCategory.value !== null) {
+    const category = categories.value.find((item) => item.id === selectedCategory.value)
+
+    if (category) chips.push({ key: 'category', label: category.name })
+  }
+
+  if (selectedType.value !== null) {
+    const type = types.find((item) => item.value === selectedType.value)
+
+    if (type) chips.push({ key: 'type', label: type.label })
+  }
+
+  if (selectedStatus.value !== null) {
+    const status = statuses.find((item) => item.value === selectedStatus.value)
+
+    if (status) chips.push({ key: 'status', label: status.label })
+  }
+
+  if (appliedMinPrice.value !== null || appliedMaxPrice.value !== null) {
+    chips.push({ key: 'price', label: priceFilterLabel.value })
+  }
+
+  return chips
+})
+
 const locationErrorMessage = computed(() => {
   switch (locationError.value) {
     case 'unsupported':
@@ -278,7 +398,6 @@ function classifyLocationError(error: GeolocationPositionError): LocationErrorKi
 function requestUserPosition() {
   locating.value = true
   locationError.value = null
-  cityError.value = ''
 
   if (!navigator.geolocation) {
     locationError.value = 'unsupported'
@@ -310,14 +429,6 @@ function requestUserPosition() {
   )
 }
 
-function normalizeCity(value: string) {
-  return value
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .trim()
-    .toLowerCase()
-}
-
 async function loadCategories() {
   categoriesLoading.value = true
   categoriesError.value = ''
@@ -331,24 +442,13 @@ async function loadCategories() {
   }
 }
 
-function toggleCategory(category: number) {
-  selectedCategory.value = selectedCategory.value === category ? null : category
-}
-
-function toggleType(type: string) {
-  selectedType.value = selectedType.value === type ? null : type
-}
-
-function toggleStatus(status: string) {
-  selectedStatus.value = selectedStatus.value === status ? null : status
-}
-
 function openFilters() {
   draftSelectedCategory.value = selectedCategory.value
   draftSelectedType.value = selectedType.value
   draftSelectedStatus.value = selectedStatus.value
   draftMinPrice.value = appliedMinPrice.value
   draftMaxPrice.value = appliedMaxPrice.value
+  draftRadiusKm.value = radiusKm.value
   filtersOpen.value = true
 }
 
@@ -359,12 +459,17 @@ function closeFilters() {
 function applyFilters() {
   if (draftPriceError.value) return
 
+  const shouldRefreshRadius = radiusDraftChanged.value
+
   selectedCategory.value = draftSelectedCategory.value
   selectedType.value = draftSelectedType.value
   selectedStatus.value = draftSelectedStatus.value
   appliedMinPrice.value = draftMinPrice.value
   appliedMaxPrice.value = draftMaxPrice.value
+  radiusKm.value = draftRadiusKm.value
   filtersOpen.value = false
+
+  if (shouldRefreshRadius) void refreshRadiusOffers()
 }
 
 function clearDraftFilters() {
@@ -385,28 +490,81 @@ function clearFilters() {
   clearDraftFilters()
 }
 
-function searchByCity() {
-  const query = normalizeCity(cityQuery.value)
-  const matches = cityOptions.filter((city) => normalizeCity(city.name).includes(query))
+function clearAppliedFilter(key: AppliedFilterKey) {
+  switch (key) {
+    case 'category':
+      selectedCategory.value = null
+      break
+    case 'type':
+      selectedType.value = null
+      break
+    case 'status':
+      selectedStatus.value = null
+      break
+    case 'price':
+      appliedMinPrice.value = null
+      appliedMaxPrice.value = null
+      break
+  }
+}
 
-  if (!query || matches.length !== 1) {
-    cityError.value = 'Choisis une ville dans la liste proposée.'
+function clearAppliedFilters() {
+  selectedCategory.value = null
+  selectedType.value = null
+  selectedStatus.value = null
+  appliedMinPrice.value = null
+  appliedMaxPrice.value = null
+}
+
+function selectCity(city: CityOption | null) {
+  selectedCity.value = city
+
+  if (!city) {
+    if (browseScope.value === 'city') void fetchAllOffers()
     return
   }
 
-  const city = matches[0]!
-  cityQuery.value = city.name
-  cityError.value = ''
   locationError.value = null
-  radiusKm.value = 25
+  cityAreaMode.value = 'city'
+  radiusKm.value = 50
+  void fetchOffersByCity(city)
+}
+
+function selectLocationScope(key: string) {
+  if (key === 'all') {
+    showAllOffers()
+    return
+  }
+
+  if (key === 'nearby') {
+    requestUserPosition()
+    return
+  }
+
+  if (!key.startsWith('city:')) return
+
+  const city = cityByName(key.slice(5))
+
+  if (city) selectCity(city)
+}
+
+function setCityAreaMode(mode: CityAreaMode) {
+  if (!selectedCity.value || cityAreaMode.value === mode) return
+
+  cityAreaMode.value = mode
+
+  if (mode === 'city') {
+    void fetchOffersByCity(selectedCity.value)
+    return
+  }
 
   void loadOffersNear(
     {
-      latitude: city.latitude,
-      longitude: city.longitude,
+      latitude: selectedCity.value.latitude,
+      longitude: selectedCity.value.longitude,
     },
     'city',
-    city.name,
+    selectedCity.value,
   )
 }
 
@@ -417,19 +575,13 @@ async function fetchAllOffers() {
   offersError.value = ''
 
   try {
-    const firstResponse = await api.get<PaginatedResponse<Offer>>('/offers', {
-      params: { page: 1 },
-    })
+    const firstResponse = await getOffersPage({ page: 1, per_page: 100 })
     const remainingPages = Array.from(
       { length: Math.max(0, firstResponse.data.meta.last_page - 1) },
       (_, index) => index + 2,
     )
     const remainingResponses = await Promise.all(
-      remainingPages.map((page) =>
-        api.get<PaginatedResponse<Offer>>('/offers', {
-          params: { page },
-        }),
-      ),
+      remainingPages.map((page) => getOffersPage({ page, per_page: 100 })),
     )
 
     if (requestId === offersRequestId) {
@@ -440,9 +592,9 @@ async function fetchAllOffers() {
       browseScope.value = 'all'
       searchCenter.value = null
       selectedCityName.value = ''
-      cityQuery.value = ''
+      selectedCity.value = null
+      cityAreaMode.value = 'city'
       locationError.value = null
-      cityError.value = ''
       retryOffersRequest = null
     }
   } catch (exception) {
@@ -456,30 +608,106 @@ async function fetchAllOffers() {
   }
 }
 
-async function loadOffersNear(
-  center: { latitude: number; longitude: number },
-  targetScope: Exclude<BrowseScope, 'all'>,
-  cityName = '',
-) {
+async function fetchOffersByCity(city: CityOption) {
   const requestId = ++offersRequestId
-  retryOffersRequest = () => loadOffersNear(center, targetScope, cityName)
+  retryOffersRequest = () => fetchOffersByCity(city)
   loadingOffers.value = true
   offersError.value = ''
 
   try {
-    const response = await api.get<PaginatedResponse<Offer>>('/offers/nearby', {
+    const firstResponse = await getOffersPage({ city: city.name, page: 1, per_page: 100 })
+    const remainingPages = Array.from(
+      { length: Math.max(0, firstResponse.data.meta.last_page - 1) },
+      (_, index) => index + 2,
+    )
+    const remainingResponses = await Promise.all(
+      remainingPages.map((page) => getOffersPage({ city: city.name, page, per_page: 100 })),
+    )
+
+    if (requestId === offersRequestId) {
+      offers.value = [
+        ...firstResponse.data.data,
+        ...remainingResponses.flatMap((response) => response.data.data),
+      ]
+      browseScope.value = 'city'
+      searchCenter.value = {
+        latitude: city.latitude,
+        longitude: city.longitude,
+      }
+      selectedCity.value = city
+      selectedCityName.value = city.name
+      cityAreaMode.value = 'city'
+      retryOffersRequest = null
+    }
+  } catch (exception) {
+    if (requestId === offersRequestId) {
+      offersError.value = extractErrorMessage(
+        exception,
+        `Impossible de charger les annonces à ${city.name}.`,
+      )
+    }
+  } finally {
+    if (requestId === offersRequestId) {
+      loadingOffers.value = false
+    }
+  }
+}
+
+async function loadOffersNear(
+  center: { latitude: number; longitude: number },
+  targetScope: 'nearby' | 'city',
+  city: CityOption | null = null,
+) {
+  const requestId = ++offersRequestId
+  retryOffersRequest = () => loadOffersNear(center, targetScope, city)
+  loadingOffers.value = true
+  offersError.value = ''
+
+  try {
+    const params = {
+      latitude: center.latitude,
+      longitude: center.longitude,
+      radius: radiusKm.value,
+      per_page: 100,
+    }
+    const firstResponse = await api.get<PaginatedResponse<Offer>>('/offers/nearby', {
       params: {
-        latitude: center.latitude,
-        longitude: center.longitude,
-        radius: radiusKm.value,
+        ...params,
+        page: 1,
       },
     })
+    const remainingPages = Array.from(
+      { length: Math.max(0, firstResponse.data.meta.last_page - 1) },
+      (_, index) => index + 2,
+    )
+    const remainingResponses = await Promise.all(
+      remainingPages.map((page) =>
+        api.get<PaginatedResponse<Offer>>('/offers/nearby', {
+          params: {
+            ...params,
+            page,
+          },
+        }),
+      ),
+    )
 
     if (requestId === offersRequestId) {
       searchCenter.value = center
       browseScope.value = targetScope
-      selectedCityName.value = cityName
-      offers.value = response.data.data
+
+      if (targetScope === 'city' && city) {
+        selectedCityName.value = city.name
+        selectedCity.value = city
+        cityAreaMode.value = 'surroundings'
+      } else {
+        selectedCityName.value = ''
+        selectedCity.value = null
+        cityAreaMode.value = 'city'
+      }
+      offers.value = [
+        ...firstResponse.data.data,
+        ...remainingResponses.flatMap((response) => response.data.data),
+      ]
       retryOffersRequest = null
     }
   } catch (exception) {
@@ -497,9 +725,27 @@ async function loadOffersNear(
 }
 
 async function fetchNearbyOffers() {
-  if (!searchCenter.value || browseScope.value === 'all') return
+  if (!searchCenter.value || browseScope.value !== 'nearby') return
 
-  await loadOffersNear(searchCenter.value, browseScope.value, selectedCityName.value)
+  await loadOffersNear(searchCenter.value, 'nearby')
+}
+
+async function refreshRadiusOffers() {
+  if (browseScope.value === 'nearby') {
+    await fetchNearbyOffers()
+    return
+  }
+
+  if (browseScope.value === 'city' && cityAreaMode.value === 'surroundings' && selectedCity.value) {
+    await loadOffersNear(
+      {
+        latitude: selectedCity.value.latitude,
+        longitude: selectedCity.value.longitude,
+      },
+      'city',
+      selectedCity.value,
+    )
+  }
 }
 
 function showAllOffers() {
@@ -517,6 +763,15 @@ function retryOffers() {
     return
   }
 
+  if (browseScope.value === 'city' && selectedCity.value) {
+    if (cityAreaMode.value === 'surroundings') {
+      void refreshRadiusOffers()
+    } else {
+      void fetchOffersByCity(selectedCity.value)
+    }
+    return
+  }
+
   void fetchNearbyOffers()
 }
 
@@ -526,7 +781,7 @@ function expandRadius() {
   if (!nextRadius) return
 
   radiusKm.value = nextRadius
-  void fetchNearbyOffers()
+  void refreshRadiusOffers()
 }
 
 let previousBodyOverflow = ''
@@ -540,6 +795,12 @@ watch(filtersOpen, (isOpen) => {
   }
 
   document.body.style.overflow = previousBodyOverflow
+})
+
+watch([browseScope, cityAreaMode], () => {
+  if (!availableViewModes.value.some((mode) => mode.value === viewMode.value)) {
+    viewMode.value = 'explorer'
+  }
 })
 
 function handleFilterKeydown(event: KeyboardEvent) {
@@ -582,156 +843,200 @@ function scrollCarousel(direction: 'left' | 'right') {
 </script>
 
 <template>
-  <div class="mx-auto max-w-7xl px-6 py-8">
+  <div class="mx-auto max-w-7xl overflow-x-clip px-6 py-8">
     <!-- Header + compact toolbar -->
     <div class="mb-5 flex flex-col gap-4">
-      <div class="flex flex-wrap items-center justify-between gap-4">
-        <h1 class="font-display text-2xl font-bold text-ink">Près de moi</h1>
-
-        <div class="flex flex-1 flex-wrap items-center justify-end gap-2">
-          <!-- Search -->
-          <div
-            class="flex h-9 w-full max-w-xs items-center rounded-md border border-ink/15 bg-surface px-3 transition-colors focus-within:border-primary"
-          >
-            <svg
-              class="mr-2 h-4 w-4 shrink-0 text-ink/40"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-            >
-              <circle cx="11" cy="11" r="7" />
-              <path d="m20 20-4-4" />
-            </svg>
-
-            <input
-              v-model="searchQuery"
-              type="search"
-              placeholder="Rechercher autour de moi..."
-              class="min-w-0 flex-1 bg-transparent text-sm text-ink outline-none placeholder:text-ink/40"
-            />
-
-            <button
-              v-if="searchQuery"
-              type="button"
-              class="ml-2 text-ink/40 transition-colors hover:text-ink"
-              aria-label="Effacer la recherche"
-              @click="clearSearch"
-            >
-              ×
-            </button>
-          </div>
-
-          <!-- Divider -->
-          <div class="hidden h-7 w-px bg-ink/10 sm:block"></div>
-
-          <!-- View modes -->
-          <div class="flex gap-1 rounded-full bg-primary/8 p-1">
-            <button
-              v-for="mode in viewModes"
-              :key="mode.value"
-              type="button"
-              class="rounded-full px-3 py-1.5 font-mono text-xs tracking-wide transition-colors"
-              :class="
-                viewMode === mode.value
-                  ? 'bg-surface text-ink shadow-sm'
-                  : 'text-ink/50 hover:text-ink'
-              "
-              @click="viewMode = mode.value"
-            >
-              {{ mode.label }}
-            </button>
-          </div>
-
-          <!-- Divider -->
-          <div class="hidden h-7 w-px bg-ink/10 sm:block"></div>
-
-          <!-- Radius -->
-          <label
-            v-if="userPosition"
-            class="flex h-9 items-center gap-2 rounded-md border border-ink/15 bg-surface px-3 font-mono text-xs text-ink/60"
-          >
-            Rayon
-
-            <select
-              v-model.number="radiusKm"
-              :disabled="loadingOffers"
-              class="bg-transparent font-body text-sm text-ink outline-none"
-              @change="fetchNearbyOffers"
-            >
-              <option v-for="option in radiusOptions" :key="option" :value="option">
-                {{ option }} km
-              </option>
-            </select>
-          </label>
-        </div>
-      </div>
-
-      <div class="rounded-xl border border-ink/10 bg-surface p-4">
-        <div class="flex flex-col gap-3 lg:flex-row lg:items-center">
-          <div class="flex flex-wrap gap-2">
-            <button
-              type="button"
-              class="rounded-md px-4 py-2 text-sm font-semibold transition-colors"
-              :class="
-                browseScope === 'all'
-                  ? 'bg-primary text-surface'
-                  : 'border border-ink/15 text-ink hover:border-primary'
-              "
-              :disabled="loadingOffers && browseScope === 'all'"
-              @click="showAllOffers"
-            >
-              Toutes les annonces
-            </button>
-
-            <button
-              type="button"
-              class="rounded-md border border-ink/15 px-4 py-2 text-sm font-semibold text-ink transition-colors hover:border-primary disabled:cursor-wait disabled:opacity-60"
-              :class="browseScope === 'nearby' ? '!border-primary bg-primary/10 text-primary' : ''"
-              :disabled="locating"
-              @click="requestUserPosition"
-            >
-              {{ locating ? 'Localisation…' : 'Autour de moi' }}
-            </button>
-          </div>
-
-          <form class="flex min-w-0 flex-1 gap-2 lg:justify-end" @submit.prevent="searchByCity">
-            <label for="city-search" class="sr-only">Rechercher par ville</label>
-            <input
-              id="city-search"
-              v-model="cityQuery"
-              list="moroccan-cities"
-              type="search"
-              autocomplete="off"
-              placeholder="Ville : Marrakech, Casablanca…"
-              class="h-10 min-w-0 flex-1 rounded-md border border-ink/15 bg-ground px-3 text-sm text-ink outline-none transition focus:border-primary lg:max-w-sm"
-              @input="cityError = ''"
-            />
-            <datalist id="moroccan-cities">
-              <option v-for="city in cityOptions" :key="city.name" :value="city.name" />
-            </datalist>
-            <button
-              type="submit"
-              class="h-10 shrink-0 rounded-md bg-accent px-4 text-sm font-semibold text-ink transition-opacity hover:opacity-90"
-            >
-              Chercher
-            </button>
-          </form>
-        </div>
-
-        <p v-if="cityError" class="mt-3 text-sm text-status-reserved" role="alert">
-          {{ cityError }}
+      <div>
+        <h1 class="font-display text-2xl font-bold text-ink">Découvrir les annonces</h1>
+        <p class="mt-1 text-sm text-ink/55">
+          Explore les offres partout au Maroc, dans une ville ou autour de ta position.
         </p>
       </div>
 
+      <section class="rounded-2xl border border-ink/10 bg-surface p-4 sm:p-5">
+        <div class="grid gap-4 lg:grid-cols-2">
+          <div class="min-w-0">
+            <label
+              for="nearby-search"
+              class="mb-2 block font-mono text-xs font-semibold tracking-wide text-ink/50 uppercase"
+            >
+              Que cherches-tu ?
+            </label>
+
+            <div
+              class="flex h-12 w-full items-center rounded-xl border border-ink/15 bg-ground px-4 transition focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/15"
+            >
+              <svg
+                class="mr-3 h-4 w-4 shrink-0 text-ink/40"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                aria-hidden="true"
+              >
+                <circle cx="11" cy="11" r="7" />
+                <path d="m20 20-4-4" />
+              </svg>
+
+              <input
+                id="nearby-search"
+                v-model="searchQuery"
+                type="search"
+                :placeholder="searchPlaceholder"
+                class="min-w-0 flex-1 bg-transparent text-sm text-ink outline-none placeholder:text-ink/40"
+              />
+
+              <button
+                v-if="searchQuery"
+                type="button"
+                class="ml-2 text-ink/40 transition-colors hover:text-ink"
+                aria-label="Effacer la recherche"
+                @click="clearSearch"
+              >
+                ×
+              </button>
+            </div>
+          </div>
+
+          <div class="min-w-0">
+            <p class="mb-2 font-mono text-xs font-semibold tracking-wide text-ink/50 uppercase">
+              Où chercher ?
+            </p>
+            <LocationScopeCombobox
+              id="location-scope-filter"
+              :model-value="locationSelectionKey"
+              :disabled="locating"
+              label="Où chercher ?"
+              @update:model-value="selectLocationScope"
+            />
+          </div>
+        </div>
+
+        <div v-if="browseScope !== 'all'" class="mt-4 border-t border-ink/8 pt-4">
+          <div
+            v-if="browseScope === 'city' && selectedCity"
+            class="flex min-w-0 flex-col gap-2 rounded-xl border border-ink/8 bg-ground p-2 sm:flex-row sm:items-center"
+          >
+            <span
+              class="shrink-0 px-2 font-mono text-[0.7rem] font-semibold tracking-wide text-ink/50 uppercase"
+            >
+              Zone
+            </span>
+
+            <div
+              class="grid min-w-0 flex-1 grid-cols-2 gap-1 rounded-lg bg-surface p-1"
+              role="group"
+              :aria-label="`Zone de recherche autour de ${selectedCity.name}`"
+            >
+              <button
+                type="button"
+                class="min-h-9 rounded-md px-3 py-2 text-xs font-semibold transition-colors sm:text-sm"
+                :class="
+                  cityAreaMode === 'city'
+                    ? 'bg-primary text-surface shadow-sm'
+                    : 'text-ink/60 hover:text-ink'
+                "
+                :aria-pressed="cityAreaMode === 'city'"
+                :disabled="loadingOffers && cityAreaMode === 'city'"
+                @click="setCityAreaMode('city')"
+              >
+                Dans {{ selectedCity.name }}
+              </button>
+              <button
+                type="button"
+                class="min-h-9 rounded-md px-3 py-2 text-xs font-semibold transition-colors sm:text-sm"
+                :class="
+                  cityAreaMode === 'surroundings'
+                    ? 'bg-primary text-surface shadow-sm'
+                    : 'text-ink/60 hover:text-ink'
+                "
+                :aria-pressed="cityAreaMode === 'surroundings'"
+                :disabled="loadingOffers && cityAreaMode === 'surroundings'"
+                @click="setCityAreaMode('surroundings')"
+              >
+                {{ selectedCity.name }} et alentours
+              </button>
+            </div>
+
+            <label
+              v-if="cityAreaMode === 'surroundings'"
+              class="flex shrink-0 items-center justify-between gap-2 px-2 sm:justify-start"
+            >
+              <span
+                class="font-mono text-[0.7rem] font-semibold tracking-wide text-ink/50 uppercase"
+              >
+                Rayon
+              </span>
+              <span class="relative">
+                <select
+                  v-model.number="radiusKm"
+                  :aria-label="`Rayon autour de ${selectedCity.name}`"
+                  :disabled="loadingOffers"
+                  class="h-9 appearance-none rounded-full border border-primary/30 bg-surface py-0 pr-8 pl-3 text-sm font-semibold text-primary outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15 disabled:cursor-wait disabled:opacity-60"
+                  @change="refreshRadiusOffers"
+                >
+                  <option v-for="option in radiusOptions" :key="option" :value="option">
+                    {{ option }} km
+                  </option>
+                </select>
+                <ChevronDown
+                  :size="14"
+                  class="pointer-events-none absolute top-1/2 right-2.5 -translate-y-1/2 text-primary"
+                  aria-hidden="true"
+                />
+              </span>
+            </label>
+
+            <span v-else class="shrink-0 px-2 font-mono text-[0.7rem] text-ink/45">
+              Ville uniquement
+            </span>
+          </div>
+
+          <div
+            v-else-if="browseScope === 'nearby'"
+            class="flex min-w-0 items-center justify-between gap-3 rounded-xl border border-ink/8 bg-ground px-4 py-2"
+          >
+            <span class="flex items-center gap-2 text-sm font-semibold text-ink/65">
+              <MapPin :size="16" class="text-primary" aria-hidden="true" />
+              Autour de ta position
+            </span>
+            <label class="flex shrink-0 items-center gap-2">
+              <span
+                class="font-mono text-[0.7rem] font-semibold tracking-wide text-ink/50 uppercase"
+              >
+                Rayon
+              </span>
+              <span class="relative">
+                <select
+                  v-model.number="radiusKm"
+                  aria-label="Rayon autour de ta position"
+                  :disabled="loadingOffers"
+                  class="h-9 appearance-none rounded-full border border-primary/30 bg-surface py-0 pr-8 pl-3 text-sm font-semibold text-primary outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15 disabled:cursor-wait disabled:opacity-60"
+                  @change="refreshRadiusOffers"
+                >
+                  <option v-for="option in radiusOptions" :key="option" :value="option">
+                    {{ option }} km
+                  </option>
+                </select>
+                <ChevronDown
+                  :size="14"
+                  class="pointer-events-none absolute top-1/2 right-2.5 -translate-y-1/2 text-primary"
+                  aria-hidden="true"
+                />
+              </span>
+            </label>
+          </div>
+        </div>
+      </section>
+
       <nav
         aria-label="Filtres des annonces"
-        class="sticky top-16 z-20 -mx-6 border-y border-ink/10 bg-surface/95 px-6 py-3 backdrop-blur-md md:mx-0 md:rounded-xl md:border"
+        class="sticky top-16 z-20 -mx-6 overflow-hidden border-y border-ink/10 bg-surface/95 px-6 py-3 backdrop-blur-md [contain:paint] md:mx-0 md:rounded-xl md:border"
       >
         <div class="flex min-w-0 items-center gap-2">
           <button
             type="button"
-            class="relative flex h-9 shrink-0 items-center gap-2 rounded-full border border-ink/30 bg-surface px-4 text-sm font-semibold text-ink transition hover:border-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+            class="relative flex h-10 shrink-0 items-center gap-2 rounded-full border border-ink/30 bg-surface px-4 text-sm font-semibold text-ink transition hover:border-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
             :aria-label="
               activeFilterCount > 0
                 ? `Filtres, ${activeFilterCount} actif(s)`
@@ -749,134 +1054,177 @@ function scrollCarousel(direction: 'left' | 'right') {
             </span>
           </button>
 
-          <span class="h-6 w-px shrink-0 bg-ink/10" aria-hidden="true"></span>
-
           <div
             role="group"
             aria-label="Filtres rapides"
             class="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
           >
-            <button
-              v-for="type in types"
-              :key="type.value"
-              type="button"
-              class="h-9 shrink-0 rounded-full border px-4 text-sm transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-              :class="
-                selectedType === type.value
-                  ? 'border-primary bg-primary text-surface'
-                  : 'border-ink/15 bg-surface text-ink/70 hover:border-ink/40 hover:text-ink'
-              "
-              :aria-pressed="selectedType === type.value"
-              @click="toggleType(type.value)"
-            >
-              {{ type.label }}
-            </button>
-
-            <button
-              v-for="status in statuses"
-              :key="status.value"
-              type="button"
-              class="h-9 shrink-0 rounded-full border px-4 text-sm transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-              :class="
-                selectedStatus === status.value
-                  ? 'border-primary bg-primary text-surface'
-                  : 'border-ink/15 bg-surface text-ink/70 hover:border-ink/40 hover:text-ink'
-              "
-              :aria-pressed="selectedStatus === status.value"
-              @click="toggleStatus(status.value)"
-            >
-              {{ status.label }}
-            </button>
-
-            <span class="h-6 w-px shrink-0 bg-ink/10" aria-hidden="true"></span>
-
-            <template v-if="categoriesLoading">
-              <span
-                v-for="index in 4"
-                :key="index"
-                class="h-9 shrink-0 animate-pulse rounded-full bg-ink/10 motion-reduce:animate-none"
-                :class="index % 2 === 0 ? 'w-24' : 'w-20'"
-                aria-hidden="true"
-              ></span>
-            </template>
-
-            <template v-else-if="!categoriesError">
-              <button
-                v-for="category in categories"
-                :key="category.id"
-                type="button"
-                class="h-9 shrink-0 rounded-full border px-4 text-sm transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+            <label class="relative shrink-0">
+              <span class="sr-only">Filtrer par catégorie</span>
+              <select
+                v-model="selectedCategory"
+                :disabled="categoriesLoading || Boolean(categoriesError)"
+                class="h-10 max-w-52 appearance-none rounded-full border bg-surface py-0 pr-9 pl-4 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15 disabled:cursor-wait disabled:opacity-50"
                 :class="
-                  selectedCategory === category.id
-                    ? 'border-primary bg-primary text-surface'
-                    : 'border-ink/15 bg-surface text-ink/70 hover:border-ink/40 hover:text-ink'
+                  selectedCategory !== null
+                    ? 'border-primary font-semibold text-primary'
+                    : 'border-ink/15 text-ink/70 hover:border-ink/40'
                 "
-                :aria-pressed="selectedCategory === category.id"
-                @click="toggleCategory(category.id)"
               >
-                {{ category.name }}
-              </button>
-            </template>
+                <option :value="null">Catégorie</option>
+                <option v-for="category in categories" :key="category.id" :value="category.id">
+                  {{ category.name }}
+                </option>
+              </select>
+              <ChevronDown
+                :size="15"
+                class="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-ink/45"
+                aria-hidden="true"
+              />
+            </label>
+
+            <label class="relative shrink-0">
+              <span class="sr-only">Filtrer par type</span>
+              <select
+                v-model="selectedType"
+                class="h-10 appearance-none rounded-full border bg-surface py-0 pr-9 pl-4 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15"
+                :class="
+                  selectedType !== null
+                    ? 'border-primary font-semibold text-primary'
+                    : 'border-ink/15 text-ink/70 hover:border-ink/40'
+                "
+              >
+                <option :value="null">Type</option>
+                <option v-for="type in types" :key="type.value" :value="type.value">
+                  {{ type.label }}
+                </option>
+              </select>
+              <ChevronDown
+                :size="15"
+                class="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-ink/45"
+                aria-hidden="true"
+              />
+            </label>
+
+            <label class="relative shrink-0">
+              <span class="sr-only">Filtrer par disponibilité</span>
+              <select
+                v-model="selectedStatus"
+                class="h-10 appearance-none rounded-full border bg-surface py-0 pr-9 pl-4 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15"
+                :class="
+                  selectedStatus !== null
+                    ? 'border-primary font-semibold text-primary'
+                    : 'border-ink/15 text-ink/70 hover:border-ink/40'
+                "
+              >
+                <option :value="null">Disponibilité</option>
+                <option v-for="status in statuses" :key="status.value" :value="status.value">
+                  {{ status.label }}
+                </option>
+              </select>
+              <ChevronDown
+                :size="15"
+                class="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-ink/45"
+                aria-hidden="true"
+              />
+            </label>
 
             <button
               type="button"
-              class="h-9 shrink-0 rounded-full border px-4 text-sm transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+              class="h-10 shrink-0 rounded-full border px-4 text-sm transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
               :class="
                 appliedMinPrice !== null || appliedMaxPrice !== null
-                  ? 'border-primary bg-primary text-surface'
+                  ? 'border-primary bg-primary/10 font-semibold text-primary'
                   : 'border-ink/15 bg-surface text-ink/70 hover:border-ink/40 hover:text-ink'
               "
               @click="openFilters"
             >
               {{ priceFilterLabel }}
             </button>
-
-            <button
-              v-if="activeFilterCount > 0"
-              type="button"
-              class="h-9 shrink-0 px-2 text-sm font-semibold text-primary hover:underline"
-              @click="clearFilters"
-            >
-              Tout effacer
-            </button>
           </div>
+        </div>
+
+        <div
+          v-if="appliedFilterChips.length"
+          class="mt-3 flex min-w-0 items-center gap-2 overflow-x-auto border-t border-ink/8 pt-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          aria-label="Filtres appliqués"
+        >
+          <span
+            v-for="chip in appliedFilterChips"
+            :key="chip.key"
+            class="flex h-8 shrink-0 items-center gap-2 rounded-full bg-primary/10 px-3 text-xs font-semibold text-primary"
+          >
+            {{ chip.label }}
+            <button
+              type="button"
+              class="flex h-5 w-5 items-center justify-center rounded-full transition hover:bg-primary/15 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-primary"
+              :aria-label="`Retirer le filtre ${chip.label}`"
+              @click="clearAppliedFilter(chip.key)"
+            >
+              <X :size="13" aria-hidden="true" />
+            </button>
+          </span>
+
+          <button
+            type="button"
+            class="h-8 shrink-0 px-2 text-xs font-semibold text-primary hover:underline"
+            @click="clearAppliedFilters"
+          >
+            Tout effacer
+          </button>
         </div>
       </nav>
 
-      <div class="flex items-center justify-between border-b border-ink/10 pb-3">
-        <p class="font-mono text-xs text-ink/50">
-          <template v-if="loadingOffers"> Actualisation des annonces… </template>
-          <template v-else-if="offersError"> Actualisation interrompue </template>
-          <template v-else-if="searchQuery">
-            {{ filteredOffers.length }} résultat(s) pour
-            <span class="text-ink">"{{ searchQuery }}"</span>
-          </template>
-          <template v-else-if="browseScope === 'city'">
-            {{ filteredOffers.length }} annonce(s) autour de {{ selectedCityName }} dans un rayon de
-            {{ radiusKm }} km
-          </template>
-          <template v-else-if="browseScope === 'nearby'">
-            {{ filteredOffers.length }} annonce(s) autour de toi dans un rayon de {{ radiusKm }} km
-          </template>
-          <template v-else> {{ filteredOffers.length }} annonce(s) disponibles </template>
-        </p>
+      <div
+        class="flex flex-col gap-3 border-b border-ink/10 pb-3 sm:flex-row sm:items-center sm:justify-between"
+      >
+        <div class="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2">
+          <p class="font-mono text-xs text-ink/50">
+            <template v-if="loadingOffers"> Actualisation des annonces… </template>
+            <template v-else-if="offersError"> Actualisation interrompue </template>
+            <template v-else>{{ resultsSummary }}</template>
+          </p>
 
-        <button
-          v-if="searchQuery"
-          type="button"
-          class="font-mono text-xs text-primary hover:underline"
-          @click="clearSearch"
+          <button
+            v-if="searchQuery"
+            type="button"
+            class="font-mono text-xs text-primary hover:underline"
+            @click="clearSearch"
+          >
+            Effacer la recherche
+          </button>
+          <button
+            v-else-if="browseScope !== 'all'"
+            type="button"
+            class="font-mono text-xs text-primary hover:underline"
+            @click="showAllOffers"
+          >
+            Voir toutes les annonces
+          </button>
+        </div>
+
+        <div
+          v-if="availableViewModes.length"
+          class="flex w-fit max-w-full gap-1 overflow-x-auto rounded-lg bg-primary/8 p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          role="group"
+          aria-label="Mode d’affichage des résultats"
         >
-          Effacer la recherche
-        </button>
-        <button
-          v-else-if="browseScope !== 'all'"
-          type="button"
-          class="font-mono text-xs text-primary hover:underline"
-          @click="showAllOffers"
-        >
-          Voir toutes les annonces
-        </button>
+          <button
+            v-for="mode in availableViewModes"
+            :key="mode.value"
+            type="button"
+            class="shrink-0 rounded-md px-3 py-1.5 text-xs font-semibold transition-colors"
+            :class="
+              viewMode === mode.value
+                ? 'bg-surface text-ink shadow-sm'
+                : 'text-ink/55 hover:text-ink'
+            "
+            :aria-pressed="viewMode === mode.value"
+            @click="viewMode = mode.value"
+          >
+            {{ mode.label }}
+          </button>
+        </div>
       </div>
     </div>
 
@@ -927,6 +1275,9 @@ function scrollCarousel(direction: 'left' | 'right') {
               <template v-else-if="browseScope === 'all'"
                 >Reviens bientôt pour découvrir les nouveautés.</template
               >
+              <template v-else-if="browseScope === 'city' && cityAreaMode === 'city'">
+                Choisis une autre ville ou inclus les alentours.
+              </template>
               <template v-else>Augmente le rayon ou affiche toutes les annonces.</template>
             </p>
             <button
@@ -938,7 +1289,7 @@ function scrollCarousel(direction: 'left' | 'right') {
               Effacer les filtres
             </button>
             <button
-              v-else-if="canExpandRadius && browseScope !== 'all'"
+              v-else-if="canExpandRadius && isRadiusSearch"
               type="button"
               class="mt-4 text-sm font-semibold text-primary hover:underline"
               @click="expandRadius"
@@ -963,6 +1314,7 @@ function scrollCarousel(direction: 'left' | 'right') {
             :status="offer.status"
             :is-negotiable="offer.is_negotiable"
             :category="offer.category ?? null"
+            :city="offer.city"
             :images="offer.images"
           />
         </div>
@@ -973,7 +1325,7 @@ function scrollCarousel(direction: 'left' | 'right') {
             <div class="relative h-[500px]">
               <OfferMap
                 :center="searchCenter"
-                :radius-km="radiusKm"
+                :radius-km="mapRadiusKm"
                 :offers="filteredOffers"
                 @select="goToOffer"
               />
@@ -983,7 +1335,7 @@ function scrollCarousel(direction: 'left' | 'right') {
 
             <div class="flex flex-col gap-2">
               <p class="font-mono text-xs tracking-wide text-ink/40 uppercase">
-                Triées par distance
+                {{ isRadiusSearch ? 'Triées par distance' : locationContextLabel }}
               </p>
 
               <RouterLink
@@ -1003,6 +1355,14 @@ function scrollCarousel(direction: 'left' | 'right') {
                   </span>
 
                   <span class="flex items-center gap-2">
+                    <span
+                      v-if="offer.city"
+                      class="flex items-center gap-1 font-body text-xs text-ink/55"
+                    >
+                      <MapPin :size="12" class="text-primary" aria-hidden="true" />
+                      {{ offer.city }}
+                    </span>
+
                     <span v-if="offer.distance != null" class="font-mono text-xs text-ink/50">
                       {{ formatDistance(offer.distance) }}
                     </span>
@@ -1028,28 +1388,30 @@ function scrollCarousel(direction: 'left' | 'right') {
           <!-- EXPLORATEUR -->
           <div
             v-else-if="viewMode === 'explorer'"
-            class="grid gap-6 md:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]"
+            class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(420px,0.95fr)]"
           >
-            <div class="flex max-h-[640px] flex-col gap-4 overflow-y-auto pr-1">
-              <OfferCard
-                v-for="offer in filteredOffers"
-                :id="offer.id"
-                :key="offer.id"
-                class="shrink-0"
-                :title="offer.title"
-                :price="offer.price"
-                :status="offer.status"
-                :is-negotiable="offer.is_negotiable"
-                :category="offer.category ?? null"
-                :distance="offer.distance"
-                :images="offer.images"
-              />
+            <div class="lg:max-h-[680px] lg:overflow-y-auto lg:pr-1">
+              <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <OfferCard
+                  v-for="offer in filteredOffers"
+                  :id="offer.id"
+                  :key="offer.id"
+                  :title="offer.title"
+                  :price="offer.price"
+                  :status="offer.status"
+                  :is-negotiable="offer.is_negotiable"
+                  :category="offer.category ?? null"
+                  :city="offer.city"
+                  :distance="offer.distance"
+                  :images="offer.images"
+                />
+              </div>
             </div>
 
             <OfferMap
-              class="sticky top-24 !h-[640px]"
+              class="!h-[520px] lg:sticky lg:top-24 lg:!h-[680px]"
               :center="searchCenter"
-              :radius-km="radiusKm"
+              :radius-km="mapRadiusKm"
               :offers="filteredOffers"
               @select="goToOffer"
             />
@@ -1060,7 +1422,7 @@ function scrollCarousel(direction: 'left' | 'right') {
             <OfferMap
               class="!h-full !w-full !rounded-none md:!rounded-xl"
               :center="searchCenter"
-              :radius-km="radiusKm"
+              :radius-km="mapRadiusKm"
               :offers="filteredOffers"
               @select="goToOffer"
             />
@@ -1073,7 +1435,7 @@ function scrollCarousel(direction: 'left' | 'right') {
                 <div class="mb-3 flex items-center justify-between">
                   <div>
                     <p class="font-mono text-xs tracking-wide text-ink/40 uppercase">
-                      Autour de toi
+                      {{ locationContextLabel }}
                     </p>
 
                     <p class="mt-0.5 text-xs text-ink/50">{{ filteredOffers.length }} annonce(s)</p>
@@ -1117,7 +1479,7 @@ function scrollCarousel(direction: 'left' | 'right') {
                     <div class="relative h-28 overflow-hidden bg-primary/10">
                       <img
                         v-if="offer.images?.[0]?.url"
-                        :src="offer.images[0].url"
+                        :src="resolveStorageUrl(offer.images[0].url)"
                         :alt="offer.title"
                         class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
                       />
@@ -1144,8 +1506,12 @@ function scrollCarousel(direction: 'left' | 'right') {
                       </p>
 
                       <div class="mt-2 flex items-center justify-between gap-2">
-                        <span v-if="offer.distance != null" class="font-mono text-xs text-ink/50">
-                          {{ formatDistance(offer.distance) }}
+                        <span
+                          v-if="offer.city"
+                          class="flex min-w-0 items-center gap-1 font-body text-xs text-ink/55"
+                        >
+                          <MapPin :size="12" class="shrink-0 text-primary" aria-hidden="true" />
+                          <span class="truncate">{{ offer.city }}</span>
                         </span>
 
                         <span
@@ -1196,6 +1562,34 @@ function scrollCarousel(direction: 'left' | 'right') {
           </header>
 
           <div class="overflow-y-auto px-6 py-1 sm:px-8">
+            <section v-if="isRadiusSearch" class="border-b border-ink/10 py-6">
+              <h3 class="font-display text-xl font-semibold text-ink">Distance</h3>
+              <p class="mt-1 text-sm text-ink/50">
+                <template v-if="browseScope === 'city' && selectedCityName">
+                  Jusqu’où chercher autour de {{ selectedCityName }} ?
+                </template>
+                <template v-else>Jusqu’où chercher autour de ta position ?</template>
+              </p>
+
+              <div class="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-5">
+                <button
+                  v-for="option in radiusOptions"
+                  :key="option"
+                  type="button"
+                  class="rounded-xl border px-3 py-3 text-sm font-medium transition"
+                  :class="
+                    draftRadiusKm === option
+                      ? 'border-primary bg-primary/10 text-primary ring-1 ring-primary'
+                      : 'border-ink/15 text-ink hover:border-ink/40'
+                  "
+                  :aria-pressed="draftRadiusKm === option"
+                  @click="draftRadiusKm = option"
+                >
+                  {{ option }} km
+                </button>
+              </div>
+            </section>
+
             <section class="border-b border-ink/10 py-6">
               <h3 class="font-display text-xl font-semibold text-ink">Type</h3>
               <p class="mt-1 text-sm text-ink/50">Choisis le type d’annonce à afficher.</p>
@@ -1397,7 +1791,8 @@ function scrollCarousel(direction: 'left' | 'right') {
               :disabled="Boolean(draftPriceError)"
               @click="applyFilters"
             >
-              Afficher {{ draftResultCount }} annonce(s)
+              <template v-if="radiusDraftChanged">Appliquer les filtres</template>
+              <template v-else>Afficher {{ draftResultCount }} annonce(s)</template>
             </button>
           </footer>
         </section>

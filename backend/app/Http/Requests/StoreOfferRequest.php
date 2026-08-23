@@ -32,12 +32,16 @@ class StoreOfferRequest extends FormRequest
 
             'type' => 'required|in:product,service',
 
+            'service_duration_minutes' => 'nullable|required_if:type,service|integer|min:15|max:480',
+
             'price' => 'required|numeric|min:0',
 
             'is_negotiable' => 'required|boolean',
 
             'status' => 'required|in:active,reserved,sold,inactive',
-            
+
+            'city' => ['nullable', 'string', 'max:100'],
+
             'location' => ['required', 'array'],
             'location.latitude' => ['required', 'numeric', 'between:-90,90'],
             'location.longitude' => ['required', 'numeric', 'between:-180,180'],
@@ -47,12 +51,29 @@ class StoreOfferRequest extends FormRequest
                 'array',
                 'max:5',
             ],
-            
+
             'images.*' => [
-                'image',
+                'file',
                 'mimes:jpg,jpeg,png,webp,avif',
-                // 'max:5120',
+                'mimetypes:image/jpeg,image/png,image/webp,image/avif',
             ],
+        ];
+    }
+
+    /**
+     * Get the validation error messages for the request.
+     *
+     * Laravel's `image` rule does not include AVIF in the framework version
+     * used by the project, even though the frontend explicitly supports it.
+     */
+    public function messages(): array
+    {
+        return [
+            'images.array' => 'Les photos doivent être envoyées sous forme de liste.',
+            'images.max' => 'Vous pouvez ajouter au maximum 5 photos.',
+            'images.*.file' => 'Chaque photo doit être un fichier valide.',
+            'images.*.mimes' => 'Chaque photo doit être au format JPG, PNG, WEBP ou AVIF.',
+            'images.*.mimetypes' => 'Chaque fichier doit être une image JPG, PNG, WEBP ou AVIF valide.',
         ];
     }
 }

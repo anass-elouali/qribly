@@ -5,6 +5,7 @@ import dayjs from 'dayjs'
 import {
   BriefcaseBusiness,
   CalendarDays,
+  Clock3,
   ChevronLeft,
   ChevronRight,
   Images,
@@ -27,6 +28,7 @@ import OfferDetailsSkeleton from '@/components/offers/OfferDetailsSkeleton.vue'
 import OfferLocationMap from '@/components/offers/OfferLocationMap.vue'
 import OfferReviews from '@/components/reviews/OfferReviews.vue'
 import AsyncStatePanel from '@/components/ui/AsyncStatePanel.vue'
+import BookingSlotPicker from '@/components/reservations/BookingSlotPicker.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -50,6 +52,7 @@ const booking = ref(false)
 const bookingError = ref('')
 const bookingSuccess = ref(false)
 const scheduledAtTouched = ref(false)
+const slotPicker = ref<{ refresh: () => Promise<void> } | null>(null)
 
 const NOTES_MAX_LENGTH = 1000
 
@@ -119,6 +122,19 @@ const hiddenGalleryImageCount = computed(() => Math.max(0, galleryImages.value.l
 const offerTypeLabel = computed(() => {
   return offer.value?.type === 'service' ? 'Service' : 'Produit'
 })
+
+function formatServiceDuration(minutes: number | null | undefined) {
+  const duration = minutes ?? 60
+
+  if (duration < 60) {
+    return `${duration} min`
+  }
+
+  const hours = Math.floor(duration / 60)
+  const remainingMinutes = duration % 60
+
+  return remainingMinutes ? `${hours} h ${remainingMinutes}` : `${hours} h`
+}
 
 async function openGallery(index = 0, event?: MouseEvent) {
   if (!galleryImages.value[index]) {
@@ -206,6 +222,7 @@ async function submitReservation() {
     scheduledAtTouched.value = false
   } catch (err) {
     bookingError.value = extractErrorMessage(err, 'Impossible de réserver ce service.')
+    await slotPicker.value?.refresh()
   } finally {
     booking.value = false
   }
@@ -387,6 +404,10 @@ watch(
               {{ statusLabel[offer.status] }}
             </span>
             <span v-if="offer.is_negotiable" class="offer-detail-chip">Prix négociable</span>
+            <span v-if="offer.type === 'service'" class="offer-detail-chip">
+              <Clock3 :size="15" aria-hidden="true" />
+              {{ formatServiceDuration(offer.service_duration_minutes) }}
+            </span>
           </div>
 
           <p class="mt-3 font-mono text-2xl font-bold text-accent">
@@ -440,6 +461,11 @@ watch(
             {{ formatPrice(offer.price) }} DH
           </p>
 
+          <p class="mt-1 flex items-center gap-1.5 font-body text-xs text-ink/50">
+            <Clock3 :size="14" aria-hidden="true" />
+            Durée prévue : {{ formatServiceDuration(offer.service_duration_minutes) }}
+          </p>
+
           <p v-if="!authStore.isAuthenticated" class="mt-5 font-body text-sm text-ink/60">
             <RouterLink :to="{ name: 'login' }" class="font-semibold text-primary hover:underline">
               Connecte-toi
@@ -477,34 +503,14 @@ watch(
             novalidate
             @submit.prevent="submitReservation"
           >
-            <div>
-              <label for="scheduled" class="mb-1.5 block font-body text-sm font-medium text-ink">
-                Date et heure
-              </label>
-              <input
-                id="scheduled"
-                v-model="scheduledAt"
-                type="datetime-local"
-                :min="minScheduledAt"
-                class="w-full rounded-lg border border-ink/15 bg-ground px-3 py-2 font-body outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
-                :class="scheduledAtError ? '!border-status-reserved' : ''"
-                :aria-invalid="Boolean(scheduledAtError)"
-                :aria-describedby="scheduledAtError ? 'scheduled-error' : 'scheduled-help'"
-                @focus="refreshMinimumDate"
-                @blur="scheduledAtTouched = true"
-              />
-              <p id="scheduled-help" class="mt-1 font-body text-xs text-ink/45">
-                Heure locale de ton appareil.
-              </p>
-              <p
-                v-if="scheduledAtError"
-                id="scheduled-error"
-                class="mt-1 font-body text-xs text-status-reserved"
-                role="alert"
-              >
-                {{ scheduledAtError }}
-              </p>
-            </div>
+            <BookingSlotPicker
+              ref="slotPicker"
+              v-model="scheduledAt"
+              :offer-id="offer.id"
+              :min-scheduled-at="minScheduledAt"
+              :error-message="scheduledAtError"
+              @touch="scheduledAtTouched = true"
+            />
 
             <div>
               <label for="resa-notes" class="mb-1.5 block font-body text-sm font-medium text-ink">
@@ -692,6 +698,7 @@ watch(
 
 .booking-panel {
   grid-area: booking;
+  min-width: 0;
 }
 
 .offer-supporting-content {

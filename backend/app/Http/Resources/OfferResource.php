@@ -23,20 +23,21 @@ class OfferResource extends JsonResource
             'price' => $this->price,
             'is_negotiable' => $this->is_negotiable,
             'status' => $this->status,
+            'service_duration_minutes' => $this->service_duration_minutes,
+            'city' => $this->city,
 
             'location' => $this->location ? [
                 'latitude' => $this->latitude,
                 'longitude' => $this->longitude,
-            ]:null,
-            
+            ] : null,
+
             'category' => CategoryResource::make(
                 $this->whenLoaded('category')
             ),
-            
+
             'owner' => UserResource::make(
                 $this->whenLoaded('user')
             ),
-
 
             'images' => $this->whenLoaded('offerImages', function () {
                 return $this->offerImages->map(function ($image) {
@@ -54,7 +55,7 @@ class OfferResource extends JsonResource
             'semantic_score' => isset($this->semantic_score)
                 ? round($this->semantic_score, 4)
                 : null,
-            
+
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
         ];

@@ -2,16 +2,16 @@
 
 namespace App\Http\Controllers;
 
-
+use App\Http\Requests\NearbyOfferRequest;
+use App\Http\Requests\OfferIndexRequest;
+use App\Http\Requests\SmartSearchOfferRequest;
 use App\Http\Requests\StoreOfferRequest;
 use App\Http\Requests\UpdateOfferRequest;
 use App\Http\Resources\OfferResource;
 use App\Models\Offer;
-use Illuminate\Support\Facades\DB;
-use App\Http\Requests\NearbyOfferRequest;
-use App\Http\Requests\OfferIndexRequest;
-use App\Http\Requests\SmartSearchOfferRequest;
 use App\Services\SemanticOfferRankingService;
+use App\Support\MoroccanCities;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
 class OfferController extends Controller
@@ -26,7 +26,6 @@ class OfferController extends Controller
         $query = Offer::withLocationCoordinates()
             ->with(['category', 'user', 'offerImages']);
 
-        
         $query->when($filters['category'] ?? null, function ($query, $category) {
             $query->where('category_id', $category);
         });
@@ -38,6 +37,10 @@ class OfferController extends Controller
             });
         });
 
+        $query->when($filters['city'] ?? null, function ($query, $city) {
+            $query->whereRaw('LOWER(city) = LOWER(?)', [$city]);
+        });
+
         $query->when($filters['type'] ?? null, function ($query, $type) {
             $query->where('type', $type);
         });
@@ -45,7 +48,6 @@ class OfferController extends Controller
         $query->when($filters['status'] ?? null, function ($query, $status) {
             $query->where('status', $status);
         });
-
 
         $query->when($filters['min_price'] ?? null, function ($query, $minPrice) {
             $query->where('price', '>=', $minPrice);
@@ -59,8 +61,10 @@ class OfferController extends Controller
             $query->where('user_id', $request->user('sanctum')?->id);
         });
 
-        $offers = $query->latest()->paginate(9);
-        
+        $offers = $query
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->paginate($filters['per_page'] ?? 9);
 
         return OfferResource::collection($offers);
     }
@@ -75,6 +79,7 @@ class OfferController extends Controller
         // Extract location
         $latitude = $data['location']['latitude'];
         $longitude = $data['location']['longitude'];
+        $data['city'] = $data['city'] ?? MoroccanCities::nearest($latitude, $longitude);
 
         unset($data['location']);
 
@@ -93,7 +98,6 @@ class OfferController extends Controller
         // Create offer
         $offer = $request->user()->offers()->create($data);
 
-
         // Store images
         foreach ($images as $image) {
             $path = $image->store('offers', 'public');
@@ -103,15 +107,12 @@ class OfferController extends Controller
             ]);
         }
 
-
-         // Load relationships
+        // Load relationships
         $offer->load([
             'category',
             'user',
             'offerImages',
         ]);
-
-    
 
         return (new OfferResource($offer))
             ->response()
@@ -128,7 +129,6 @@ class OfferController extends Controller
             ->with(['category', 'user', 'offerImages'])
             ->findOrFail($offer->id);
 
-
         return new OfferResource($offer);
     }
 
@@ -144,6 +144,7 @@ class OfferController extends Controller
         if (isset($data['location'])) {
             $latitude = $data['location']['latitude'];
             $longitude = $data['location']['longitude'];
+            $data['city'] = $data['city'] ?? MoroccanCities::nearest($latitude, $longitude);
 
             unset($data['location']);
 
@@ -161,8 +162,7 @@ class OfferController extends Controller
             ->with(['category', 'user', 'offerImages'])
             ->findOrFail($offer->id);
 
-
-        return (new OfferResource($offer));
+        return new OfferResource($offer);
     }
 
     /**
@@ -179,8 +179,9 @@ class OfferController extends Controller
         }
 
         $offer->delete();
-         return response()->json([
-            'message' => 'Offer deleted successfully'
+
+        return response()->json([
+            'message' => 'Offer deleted successfully',
         ]);
     }
 
@@ -189,6 +190,7 @@ class OfferController extends Controller
         $latitude = $request->validated('latitude');
         $longitude = $request->validated('longitude');
         $radius = $request->validated('radius') * 1000;
+        $perPage = $request->validated('per_page', 10);
 
         $point = 'ST_SetSRID(ST_MakePoint(?, ?), 4326)::geography';
 
@@ -203,7 +205,7 @@ class OfferController extends Controller
                 [$longitude, $latitude, $radius]
             )
             ->orderBy('distance')
-            ->paginate(10);
+            ->paginate($perPage);
 
         return OfferResource::collection($offers);
     }
@@ -244,5 +246,4 @@ class OfferController extends Controller
                 ],
             ]);
     }
-    
 }

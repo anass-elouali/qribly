@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 import ProviderActionDialog from '@/components/reservations/ProviderActionDialog.vue'
+import ProviderAvailabilityEditor from '@/components/profile/ProviderAvailabilityEditor.vue'
 import ProviderReservationCard from '@/components/reservations/ProviderReservationCard.vue'
 import ReservationDetailsModal from '@/components/reservations/ReservationDetailsModal.vue'
 import api from '@/services/api'
@@ -161,6 +162,8 @@ watch(
         </p>
       </div>
     </div>
+
+    <ProviderAvailabilityEditor />
 
     <div class="mb-7 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
       <div class="rounded-lg border border-ink/10 bg-surface p-4">
