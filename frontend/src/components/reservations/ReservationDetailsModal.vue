@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import dayjs from 'dayjs'
-import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { X } from 'lucide-vue-next'
 
 import type { ProviderReservationAction, Reservation } from '@/types/reservation'
 import {
+  canCompleteReservation,
   formatReservationDuration,
+  reservationEndsAt,
   reservationStatusColor,
   reservationStatusLabel,
 } from '@/utils/reservation'
@@ -13,10 +15,16 @@ import { initials } from '@/utils/user'
 
 const props = defineProps<{
   reservation: Reservation
+  nowMs: number
   contactError?: string
   activeAction?: ProviderReservationAction | null
   contacting?: boolean
 }>()
+
+const completionAllowed = computed(() => canCompleteReservation(props.reservation, props.nowMs))
+const completionAvailableLabel = computed(() =>
+  reservationEndsAt(props.reservation).format('DD MMM [à] HH:mm'),
+)
 
 const emit = defineEmits<{
   close: []
@@ -265,8 +273,11 @@ onBeforeUnmount(() => {
             <button
               v-if="reservation.status === 'confirmed'"
               type="button"
-              class="rounded-md border border-primary px-3 py-2 font-mono text-xs text-primary transition hover:bg-primary/10 disabled:cursor-wait disabled:opacity-50"
-              :disabled="Boolean(activeAction) || contacting"
+              class="rounded-md border border-primary px-3 py-2 font-mono text-xs text-primary transition hover:bg-primary/10 disabled:cursor-not-allowed disabled:border-ink/10 disabled:text-ink/35 disabled:opacity-100"
+              :disabled="Boolean(activeAction) || contacting || !completionAllowed"
+              :aria-describedby="
+                !completionAllowed ? `modal-completion-availability-${reservation.id}` : undefined
+              "
               @click="emit('complete', reservation.id)"
             >
               {{ activeAction === 'complete' ? 'Finalisation…' : 'Terminer' }}
@@ -282,6 +293,14 @@ onBeforeUnmount(() => {
               {{ activeAction === 'cancel' ? 'Annulation…' : 'Annuler' }}
             </button>
           </div>
+
+          <p
+            v-if="reservation.status === 'confirmed' && !completionAllowed"
+            :id="`modal-completion-availability-${reservation.id}`"
+            class="w-full text-right font-body text-xs text-ink/50"
+          >
+            Disponible après la fin du rendez-vous · {{ completionAvailableLabel }}
+          </p>
         </div>
       </section>
     </div>

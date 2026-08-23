@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 import ProviderActionDialog from '@/components/reservations/ProviderActionDialog.vue'
@@ -29,6 +29,20 @@ const emit = defineEmits<{
 type ProviderFilter = 'all' | 'pending' | 'confirmed' | 'completed' | 'cancelled'
 
 const providerFilter = ref<ProviderFilter>('all')
+const nowMs = ref(Date.now())
+let clockInterval: ReturnType<typeof setInterval> | undefined
+
+onMounted(() => {
+  clockInterval = setInterval(() => {
+    nowMs.value = Date.now()
+  }, 30_000)
+})
+
+onBeforeUnmount(() => {
+  if (clockInterval) {
+    clearInterval(clockInterval)
+  }
+})
 const providerFilters: { key: ProviderFilter; label: string }[] = [
   { key: 'all', label: 'Toutes' },
   { key: 'pending', label: 'En attente' },
@@ -250,6 +264,7 @@ watch(
         v-for="reservation in filteredReservations"
         :key="reservation.id"
         :reservation="reservation"
+        :now-ms="nowMs"
         :active-action="activeActionFor(reservation.id)"
         :contacting="contactingUserId === reservation.user?.id"
         @view="viewReservation"
@@ -263,6 +278,7 @@ watch(
     <ReservationDetailsModal
       v-if="selectedReservation"
       :reservation="selectedReservation"
+      :now-ms="nowMs"
       :contact-error="contactError"
       :active-action="activeActionFor(selectedReservation.id)"
       :contacting="contactingUserId === selectedReservation.user?.id"

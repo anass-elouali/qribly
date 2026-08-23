@@ -1,3 +1,7 @@
+import dayjs from 'dayjs'
+
+import type { Reservation } from '@/types/reservation'
+
 export const reservationStatusLabel: Record<string, string> = {
   pending: 'En attente',
   confirmed: 'Confirmée',
@@ -23,4 +27,17 @@ export function formatReservationDuration(minutes: number | null | undefined) {
   const remainingMinutes = duration % 60
 
   return remainingMinutes ? `${hours} h ${remainingMinutes}` : `${hours} h`
+}
+
+export function reservationEndsAt(
+  reservation: Pick<Reservation, 'scheduled_at' | 'duration_minutes'>,
+) {
+  return dayjs(reservation.scheduled_at).add(reservation.duration_minutes ?? 60, 'minute')
+}
+
+export function canCompleteReservation(
+  reservation: Pick<Reservation, 'scheduled_at' | 'duration_minutes'>,
+  nowMs = Date.now(),
+) {
+  return !reservationEndsAt(reservation).isAfter(dayjs(nowMs))
 }

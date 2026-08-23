@@ -1,18 +1,27 @@
 <script setup lang="ts">
 import dayjs from 'dayjs'
+import { computed } from 'vue'
 import type { ProviderReservationAction, Reservation } from '@/types/reservation'
 import {
+  canCompleteReservation,
   formatReservationDuration,
+  reservationEndsAt,
   reservationStatusColor,
   reservationStatusLabel,
 } from '@/utils/reservation'
 import { initials } from '@/utils/user'
 
-defineProps<{
+const props = defineProps<{
   reservation: Reservation
+  nowMs: number
   activeAction?: ProviderReservationAction | null
   contacting?: boolean
 }>()
+
+const completionAllowed = computed(() => canCompleteReservation(props.reservation, props.nowMs))
+const completionAvailableLabel = computed(() =>
+  reservationEndsAt(props.reservation).format('DD MMM [à] HH:mm'),
+)
 
 defineEmits<{
   view: [reservation: Reservation]
@@ -130,49 +139,62 @@ defineEmits<{
 
     <div
       v-if="['pending', 'confirmed'].includes(reservation.status)"
-      class="mt-4 flex flex-col gap-2 border-t border-ink/10 pt-4 sm:flex-row sm:justify-end"
+      class="mt-4 flex flex-col items-end gap-2 border-t border-ink/10 pt-4"
     >
-      <!-- Message -->
-      <button
-        type="button"
-        class="rounded-md border border-ink/15 px-3 py-1.5 font-mono text-xs text-ink/70 transition hover:border-primary hover:text-primary disabled:cursor-wait disabled:opacity-50"
-        :disabled="Boolean(activeAction) || contacting"
-        @click="$emit('message', reservation.user?.id ?? 0)"
-      >
-        {{ contacting ? 'Ouverture…' : 'Contacter le client' }}
-      </button>
+      <div class="flex w-full flex-col gap-2 sm:flex-row sm:justify-end">
+        <!-- Message -->
+        <button
+          type="button"
+          class="rounded-md border border-ink/15 px-3 py-1.5 font-mono text-xs text-ink/70 transition hover:border-primary hover:text-primary disabled:cursor-wait disabled:opacity-50"
+          :disabled="Boolean(activeAction) || contacting"
+          @click="$emit('message', reservation.user?.id ?? 0)"
+        >
+          {{ contacting ? 'Ouverture…' : 'Contacter le client' }}
+        </button>
 
-      <!-- Confirm -->
-      <button
-        v-if="reservation.status === 'pending'"
-        type="button"
-        class="rounded-md border border-status-active px-3 py-1.5 font-mono text-xs text-status-active transition hover:bg-status-active/10 disabled:cursor-wait disabled:opacity-50"
-        :disabled="Boolean(activeAction) || contacting"
-        @click="$emit('confirm', reservation.id)"
-      >
-        {{ activeAction === 'confirm' ? 'Confirmation…' : 'Confirmer' }}
-      </button>
+        <!-- Confirm -->
+        <button
+          v-if="reservation.status === 'pending'"
+          type="button"
+          class="rounded-md border border-status-active px-3 py-1.5 font-mono text-xs text-status-active transition hover:bg-status-active/10 disabled:cursor-wait disabled:opacity-50"
+          :disabled="Boolean(activeAction) || contacting"
+          @click="$emit('confirm', reservation.id)"
+        >
+          {{ activeAction === 'confirm' ? 'Confirmation…' : 'Confirmer' }}
+        </button>
 
-      <!-- Complete -->
-      <button
-        v-if="reservation.status === 'confirmed'"
-        type="button"
-        class="rounded-md border border-primary px-3 py-1.5 font-mono text-xs text-primary transition hover:bg-primary/10 disabled:cursor-wait disabled:opacity-50"
-        :disabled="Boolean(activeAction) || contacting"
-        @click="$emit('complete', reservation.id)"
-      >
-        {{ activeAction === 'complete' ? 'Finalisation…' : 'Marquer comme terminée' }}
-      </button>
+        <!-- Complete -->
+        <button
+          v-if="reservation.status === 'confirmed'"
+          type="button"
+          class="rounded-md border border-primary px-3 py-1.5 font-mono text-xs text-primary transition hover:bg-primary/10 disabled:cursor-not-allowed disabled:border-ink/10 disabled:text-ink/35 disabled:opacity-100"
+          :disabled="Boolean(activeAction) || contacting || !completionAllowed"
+          :aria-describedby="
+            !completionAllowed ? `completion-availability-${reservation.id}` : undefined
+          "
+          @click="$emit('complete', reservation.id)"
+        >
+          {{ activeAction === 'complete' ? 'Finalisation…' : 'Marquer comme terminée' }}
+        </button>
 
-      <!-- Cancel -->
-      <button
-        type="button"
-        class="rounded-md border border-ink/15 px-3 py-1.5 font-mono text-xs text-status-reserved transition hover:border-status-reserved disabled:cursor-wait disabled:opacity-50"
-        :disabled="Boolean(activeAction) || contacting"
-        @click="$emit('cancel', reservation.id)"
+        <!-- Cancel -->
+        <button
+          type="button"
+          class="rounded-md border border-ink/15 px-3 py-1.5 font-mono text-xs text-status-reserved transition hover:border-status-reserved disabled:cursor-wait disabled:opacity-50"
+          :disabled="Boolean(activeAction) || contacting"
+          @click="$emit('cancel', reservation.id)"
+        >
+          {{ activeAction === 'cancel' ? 'Annulation…' : 'Annuler' }}
+        </button>
+      </div>
+
+      <p
+        v-if="reservation.status === 'confirmed' && !completionAllowed"
+        :id="`completion-availability-${reservation.id}`"
+        class="w-full text-right font-body text-xs text-ink/50"
       >
-        {{ activeAction === 'cancel' ? 'Annulation…' : 'Annuler' }}
-      </button>
+        Disponible après la fin du rendez-vous · {{ completionAvailableLabel }}
+      </p>
     </div>
 
     <!-- Completed -->

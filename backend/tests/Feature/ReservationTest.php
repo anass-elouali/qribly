@@ -280,6 +280,35 @@ class ReservationTest extends TestCase
         ]);
     }
 
+    public function test_provider_cannot_complete_a_reservation_before_the_appointment_ends(): void
+    {
+        $customer = User::factory()->create();
+        $provider = User::factory()->create();
+        $offer = $this->createOffer($provider);
+
+        $reservation = Reservation::create([
+            'user_id' => $customer->id,
+            'offer_id' => $offer->id,
+            'scheduled_at' => now()->subMinutes(30),
+            'duration_minutes' => 60,
+            'status' => 'confirmed',
+        ]);
+
+        $this
+            ->actingAs($provider)
+            ->patchJson("/api/provider/reservations/{$reservation->id}/complete")
+            ->assertUnprocessable()
+            ->assertJsonPath(
+                'message',
+                'Ce service pourra être terminé après la fin du rendez-vous.'
+            );
+
+        $this->assertDatabaseHas('reservations', [
+            'id' => $reservation->id,
+            'status' => 'confirmed',
+        ]);
+    }
+
     public function test_provider_can_confirm_a_pending_reservation(): void
     {
         $customer = User::factory()->create();
@@ -343,7 +372,8 @@ class ReservationTest extends TestCase
         $reservation = Reservation::create([
             'user_id' => $customer->id,
             'offer_id' => $offer->id,
-            'scheduled_at' => now()->addDay(),
+            'scheduled_at' => now()->subHours(2),
+            'duration_minutes' => 60,
             'status' => 'confirmed',
         ]);
 

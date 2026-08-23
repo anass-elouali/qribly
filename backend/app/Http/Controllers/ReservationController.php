@@ -220,6 +220,16 @@ class ReservationController extends Controller
             ], 422);
         }
 
+        $scheduledEnd = $reservation->scheduled_at
+            ->copy()
+            ->addMinutes($reservation->duration_minutes ?: 60);
+
+        if ($scheduledEnd->isFuture()) {
+            return response()->json([
+                'message' => 'Ce service pourra être terminé après la fin du rendez-vous.',
+            ], 422);
+        }
+
         $reservation->update([
             'status' => 'completed',
         ]);
