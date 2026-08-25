@@ -190,8 +190,17 @@ class ServiceRequestTest extends TestCase
                         'semantic_score' => 0.91,
                     ],
                     [
+                        // Measured against the real ranking service (2026-08-25):
+                        // a cleaning offer scores higher than expected against a
+                        // "fix a leak" query, because both texts share a lot of
+                        // generic "à domicile" vocabulary from the same category.
+                        // This is exactly the kind of same-category noise the
+                        // threshold has to reject without also rejecting genuine
+                        // matches phrased differently (see the house-cleaning and
+                        // arabic-teacher tests below) — the real value is used
+                        // here on purpose, not a round number picked to pass.
                         'id' => $irrelevantOffer->id,
-                        'semantic_score' => 0.32,
+                        'semantic_score' => 0.3789,
                     ],
                 ],
             ]),
@@ -757,6 +766,60 @@ class ServiceRequestTest extends TestCase
             'provider_id' => $provider->id,
         ]);
         Http::assertNothingSent();
+    }
+
+    public function test_house_cleaning_request_matches_above_the_adjusted_threshold_with_realistic_accented_text(): void
+    {
+        Notification::fake();
+
+        $customer = User::factory()->create();
+        $provider = User::factory()->create();
+        $category = Category::create(['name' => 'Services à domicile']);
+
+        $offer = $this->createService(
+            $provider,
+            $category,
+            city: 'Marrakech',
+            title: 'Grand ménage d’un appartement',
+            description: 'Un nettoyage complet de votre appartement : cuisine, sanitaires, sols, '
+                .'poussière et surfaces. Le matériel et les produits courants sont inclus. Idéal '
+                .'avant un emménagement, après un départ ou pour un grand ménage saisonnier.',
+        );
+
+        // Measured against the real ranking service with properly accented French
+        // text (2026-08-25): an earlier, ASCII-only test of this same scenario had
+        // wrongly suggested it would score 0.34-0.40 and fall below the threshold —
+        // that was an artifact of stripping accents before calling /rank, not a real
+        // gap. With correct accents the real score is ~0.57.
+        Http::fake([
+            '*/rank' => Http::response([
+                'results' => [
+                    ['id' => $offer->id, 'semantic_score' => 0.5728],
+                ],
+            ]),
+        ]);
+
+        $response = $this
+            ->actingAs($customer)
+            ->postJson('/api/service-requests', [
+                'raw_text' => 'Je cherche un grand ménage à domicile à Marrakech demain, budget 400 dh.',
+                'summary' => 'Grand ménage à domicile à Marrakech.',
+                'category_id' => $category->id,
+                'city' => 'Marrakech',
+                'desired_start_at' => '2026-08-26T09:00:00Z',
+                'desired_end_at' => '2026-08-26T20:00:00Z',
+                'budget_max' => 400,
+                'at_home' => true,
+            ])
+            ->assertCreated();
+
+        $this->assertDatabaseHas('service_request_matches', [
+            'service_request_id' => $response->json('data.id'),
+            'provider_id' => $provider->id,
+            'offer_id' => $offer->id,
+            'relevance_score' => 0.5728,
+        ]);
+        Notification::assertSentTo($provider, ServiceRequestPublished::class);
     }
 
     public function test_provider_can_send_and_update_a_compatible_proposal(): void
