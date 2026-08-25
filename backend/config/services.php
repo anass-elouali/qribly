@@ -39,6 +39,10 @@ return [
         // Docker service name in development. Override this for another environment.
         'url' => env('AI_SERVICE_URL', 'http://ai-service:8000'),
         'timeout' => env('AI_SERVICE_TIMEOUT', 30),
+        'service_request_match_threshold' => env(
+            'AI_SERVICE_REQUEST_MATCH_THRESHOLD',
+            0.60,
+        ),
     ],
 
 ];

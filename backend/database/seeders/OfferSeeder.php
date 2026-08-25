@@ -19,7 +19,7 @@ class OfferSeeder extends Seeder
 
         $categories = Category::all()->keyBy('name');
 
-        foreach (DemoCatalog::OFFERS as $data) {
+        foreach (DemoCatalog::allOffers() as $data) {
             $user = $users[$data['user']];
             $category = $categories[$data['category']];
 

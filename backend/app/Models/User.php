@@ -63,6 +63,11 @@ class User extends Authenticatable
         return $this->hasMany(ServiceRequestProposal::class, 'provider_id');
     }
 
+    public function serviceRequestMatches(): HasMany
+    {
+        return $this->hasMany(ServiceRequestMatch::class, 'provider_id');
+    }
+
     public function reviews()
     {
         return $this->hasMany(Review::class);

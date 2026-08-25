@@ -71,4 +71,9 @@ class Offer extends Model
     {
         return $this->hasMany(ServiceRequestProposal::class);
     }
+
+    public function serviceRequestMatches(): HasMany
+    {
+        return $this->hasMany(ServiceRequestMatch::class);
+    }
 }

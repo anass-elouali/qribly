@@ -37,7 +37,7 @@ class DemoSeedersTest extends TestCase
 
         $this->assertDatabaseCount('categories', 8);
         $this->assertDatabaseCount('users', 7);
-        $this->assertDatabaseCount('offers', 12);
+        $this->assertDatabaseCount('offers', 30);
         $this->assertDatabaseCount('offer_images', 60);
         $this->assertDatabaseCount('provider_availabilities', 26);
         $this->assertDatabaseCount('reservations', 11);
@@ -54,19 +54,33 @@ class DemoSeedersTest extends TestCase
             'service_duration_minutes' => 120,
             'status' => 'active',
         ]);
+        $this->assertDatabaseHas('offers', [
+            'title' => 'Réparation et réglage de vélo',
+            'city' => 'Marrakech',
+            'service_duration_minutes' => 90,
+            'status' => 'active',
+        ]);
         $this->assertDatabaseHas('users', ['email' => 'client@qribly.test']);
         $this->assertDatabaseHas('reservations', ['status' => 'pending']);
         $this->assertDatabaseHas('reservations', ['status' => 'confirmed']);
         $this->assertDatabaseHas('reservations', ['status' => 'completed']);
         $this->assertDatabaseHas('reservations', ['status' => 'cancelled']);
 
-        Offer::query()->with('offerImages')->each(function (Offer $offer) {
-            $this->assertCount(5, $offer->offerImages);
+        Offer::query()
+            ->whereIn('title', array_column(DemoCatalog::OFFERS, 'title'))
+            ->with('offerImages')
+            ->each(function (Offer $offer) {
+                $this->assertCount(5, $offer->offerImages);
 
-            foreach ($offer->offerImages as $image) {
-                Storage::disk('public')->assertExists($image->path);
-            }
-        });
+                foreach ($offer->offerImages as $image) {
+                    Storage::disk('public')->assertExists($image->path);
+                }
+            });
+
+        Offer::query()
+            ->whereIn('title', array_column(DemoCatalog::TEXT_ONLY_OFFERS, 'title'))
+            ->with('offerImages')
+            ->each(fn (Offer $offer) => $this->assertCount(0, $offer->offerImages));
     }
 
     public function test_demo_seeders_are_idempotent_and_busy_bookings_do_not_overlap(): void
@@ -74,7 +88,7 @@ class DemoSeedersTest extends TestCase
         $this->seed(DatabaseSeeder::class);
         $this->seed(DatabaseSeeder::class);
 
-        $this->assertDatabaseCount('offers', 12);
+        $this->assertDatabaseCount('offers', 30);
         $this->assertDatabaseCount('offer_images', 60);
         $this->assertDatabaseCount('reservations', 11);
         $this->assertDatabaseCount('reviews', 5);

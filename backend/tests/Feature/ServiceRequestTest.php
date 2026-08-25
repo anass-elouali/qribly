@@ -13,6 +13,7 @@ use App\Notifications\ServiceRequestProposalReceived;
 use App\Notifications\ServiceRequestPublished;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Notification;
 use Tests\TestCase;
 
@@ -41,11 +42,13 @@ class ServiceRequestTest extends TestCase
         Category $category,
         string $city = 'Marrakech',
         int $duration = 60,
+        string $title = 'Service à domicile',
+        string $description = 'Description complète du service proposé.',
     ): Offer {
         $offer = new Offer([
             'category_id' => $category->id,
-            'title' => 'Service à domicile',
-            'description' => 'Description complète du service proposé.',
+            'title' => $title,
+            'description' => $description,
             'type' => 'service',
             'price' => 250,
             'is_negotiable' => true,
@@ -107,11 +110,43 @@ class ServiceRequestTest extends TestCase
 
         $customer = User::factory()->create();
         $compatibleProvider = User::factory()->create();
+        $irrelevantProvider = User::factory()->create();
         $otherProvider = User::factory()->create();
         $category = Category::create(['name' => 'Services à domicile']);
 
-        $this->createService($compatibleProvider, $category);
-        $this->createService($otherProvider, $category, 'Rabat');
+        $compatibleOffer = $this->createService(
+            $compatibleProvider,
+            $category,
+            title: 'Dépannage plomberie et fuite d’eau',
+            description: 'Réparation de robinet, siphon et canalisation à domicile.',
+        );
+        $irrelevantOffer = $this->createService(
+            $irrelevantProvider,
+            $category,
+            title: 'Nettoyage complet de maison',
+            description: 'Ménage, vitres, sols et dépoussiérage à domicile.',
+        );
+        $this->createService(
+            $otherProvider,
+            $category,
+            'Rabat',
+            title: 'Dépannage plomberie à Rabat',
+        );
+
+        Http::fake([
+            '*/rank' => Http::response([
+                'results' => [
+                    [
+                        'id' => $compatibleOffer->id,
+                        'semantic_score' => 0.91,
+                    ],
+                    [
+                        'id' => $irrelevantOffer->id,
+                        'semantic_score' => 0.32,
+                    ],
+                ],
+            ]),
+        ]);
 
         $response = $this
             ->actingAs($customer)
@@ -138,8 +173,20 @@ class ServiceRequestTest extends TestCase
             'city' => 'Marrakech',
             'status' => 'open',
         ]);
+        $serviceRequestId = $response->json('data.id');
+        $this->assertDatabaseHas('service_request_matches', [
+            'service_request_id' => $serviceRequestId,
+            'provider_id' => $compatibleProvider->id,
+            'offer_id' => $compatibleOffer->id,
+            'relevance_score' => 0.91,
+        ]);
+        $this->assertDatabaseMissing('service_request_matches', [
+            'service_request_id' => $serviceRequestId,
+            'provider_id' => $irrelevantProvider->id,
+        ]);
 
         Notification::assertSentTo($compatibleProvider, ServiceRequestPublished::class);
+        Notification::assertNotSentTo($irrelevantProvider, ServiceRequestPublished::class);
         Notification::assertNotSentTo($otherProvider, ServiceRequestPublished::class);
     }
 
@@ -187,9 +234,14 @@ class ServiceRequestTest extends TestCase
         $customer = User::factory()->create();
         $category = Category::create(['name' => 'Services à domicile']);
         $otherCategory = Category::create(['name' => 'Éducation']);
-        $this->createService($provider, $category);
+        $offer = $this->createService($provider, $category);
 
         $compatible = $this->createServiceRequest($customer, $category);
+        $compatible->matches()->create([
+            'provider_id' => $provider->id,
+            'offer_id' => $offer->id,
+            'relevance_score' => 0.91,
+        ]);
         $this->createServiceRequest($customer, $category, ['city' => 'Rabat']);
         $this->createServiceRequest($customer, $otherCategory);
         $this->createServiceRequest($customer, $category, ['status' => 'cancelled']);

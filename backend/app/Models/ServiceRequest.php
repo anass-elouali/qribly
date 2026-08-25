@@ -54,6 +54,11 @@ class ServiceRequest extends Model
         return $this->hasMany(ServiceRequestProposal::class);
     }
 
+    public function matches(): HasMany
+    {
+        return $this->hasMany(ServiceRequestMatch::class);
+    }
+
     public function acceptedProposal(): HasOne
     {
         return $this->hasOne(ServiceRequestProposal::class)
