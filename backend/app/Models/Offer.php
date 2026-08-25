@@ -19,12 +19,16 @@ class Offer extends Model
         'location',
         'city',
         'service_duration_minutes',
+        'at_customer_location',
+        'at_provider_location',
     ];
 
     protected function casts(): array
     {
         return [
             'service_duration_minutes' => 'integer',
+            'at_customer_location' => 'boolean',
+            'at_provider_location' => 'boolean',
         ];
     }
 

@@ -24,6 +24,8 @@ class OfferResource extends JsonResource
             'is_negotiable' => $this->is_negotiable,
             'status' => $this->status,
             'service_duration_minutes' => $this->service_duration_minutes,
+            'at_customer_location' => $this->at_customer_location,
+            'at_provider_location' => $this->at_provider_location,
             'city' => $this->city,
 
             'location' => $this->location ? [

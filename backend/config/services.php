@@ -41,7 +41,7 @@ return [
         'timeout' => env('AI_SERVICE_TIMEOUT', 30),
         'service_request_match_threshold' => env(
             'AI_SERVICE_REQUEST_MATCH_THRESHOLD',
-            0.60,
+            0.50,
         ),
     ],
 

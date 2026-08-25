@@ -12,6 +12,8 @@ export interface OfferInfoData {
   isNegotiable: boolean
   status: 'active' | 'reserved' | 'sold' | 'inactive'
   serviceDurationMinutes: number
+  atCustomerLocation: boolean
+  atProviderLocation: boolean
 }
 
 const props = defineProps<{
@@ -42,7 +44,9 @@ const canContinue = computed(() => {
     props.modelValue.description.trim().length > 0 &&
     props.modelValue.categoryId !== null &&
     props.modelValue.price !== '' &&
-    (props.modelValue.type !== 'service' || props.modelValue.serviceDurationMinutes >= 15)
+    (props.modelValue.type !== 'service' ||
+      (props.modelValue.serviceDurationMinutes >= 15 &&
+        (props.modelValue.atCustomerLocation || props.modelValue.atProviderLocation)))
   )
 })
 
@@ -173,36 +177,95 @@ function next() {
       </label>
     </div>
 
-    <div v-if="form.type === 'service'">
-      <label
-        for="service-duration"
-        class="mb-2 block font-mono text-xs tracking-wide text-ink/60 uppercase"
-      >
-        Durée du service
-      </label>
+    <div v-if="form.type === 'service'" class="space-y-5">
+      <div>
+        <label
+          for="service-duration"
+          class="mb-2 block font-mono text-xs tracking-wide text-ink/60 uppercase"
+        >
+          Durée du service
+        </label>
 
-      <select
-        id="service-duration"
-        :value="form.serviceDurationMinutes"
-        required
-        class="w-full rounded-xl border border-ink/15 bg-ground px-4 py-3 font-body outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
-        @change="
-          update('serviceDurationMinutes', Number(($event.target as HTMLSelectElement).value))
-        "
-      >
-        <option :value="30">30 minutes</option>
-        <option :value="45">45 minutes</option>
-        <option :value="60">1 heure</option>
-        <option :value="90">1 h 30</option>
-        <option :value="120">2 heures</option>
-        <option :value="180">3 heures</option>
-        <option :value="240">4 heures</option>
-      </select>
+        <select
+          id="service-duration"
+          :value="form.serviceDurationMinutes"
+          required
+          class="w-full rounded-xl border border-ink/15 bg-ground px-4 py-3 font-body outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+          @change="
+            update('serviceDurationMinutes', Number(($event.target as HTMLSelectElement).value))
+          "
+        >
+          <option :value="30">30 minutes</option>
+          <option :value="45">45 minutes</option>
+          <option :value="60">1 heure</option>
+          <option :value="90">1 h 30</option>
+          <option :value="120">2 heures</option>
+          <option :value="180">3 heures</option>
+          <option :value="240">4 heures</option>
+        </select>
 
-      <p class="mt-1.5 font-body text-xs text-ink/45">
-        Cette durée sert à calculer les créneaux libres et à éviter les rendez-vous qui se
-        chevauchent.
-      </p>
+        <p class="mt-1.5 font-body text-xs text-ink/45">
+          Cette durée sert à calculer les créneaux libres et à éviter les rendez-vous qui se
+          chevauchent.
+        </p>
+      </div>
+
+      <fieldset>
+        <legend class="mb-2 font-mono text-xs tracking-wide text-ink/60 uppercase">
+          Où réalises-tu ce service ?
+        </legend>
+
+        <div class="grid gap-3 sm:grid-cols-2">
+          <label
+            class="flex cursor-pointer items-start gap-3 rounded-xl border border-ink/15 bg-ground p-4 transition hover:border-primary/40"
+          >
+            <input
+              :checked="form.atCustomerLocation"
+              type="checkbox"
+              class="mt-0.5 h-4 w-4 shrink-0 accent-primary"
+              @change="update('atCustomerLocation', ($event.target as HTMLInputElement).checked)"
+            />
+
+            <span>
+              <span class="block font-body text-sm font-semibold text-ink">
+                Je me déplace chez le client
+              </span>
+              <span class="mt-1 block font-body text-xs text-ink/50">
+                Le service peut être réalisé à son domicile.
+              </span>
+            </span>
+          </label>
+
+          <label
+            class="flex cursor-pointer items-start gap-3 rounded-xl border border-ink/15 bg-ground p-4 transition hover:border-primary/40"
+          >
+            <input
+              :checked="form.atProviderLocation"
+              type="checkbox"
+              class="mt-0.5 h-4 w-4 shrink-0 accent-primary"
+              @change="update('atProviderLocation', ($event.target as HTMLInputElement).checked)"
+            />
+
+            <span>
+              <span class="block font-body text-sm font-semibold text-ink">
+                Je reçois le client chez moi ou dans mon local
+              </span>
+              <span class="mt-1 block font-body text-xs text-ink/50">
+                Le client se déplace pour recevoir le service.
+              </span>
+            </span>
+          </label>
+        </div>
+
+        <p
+          class="mt-2 font-body text-xs"
+          :class="
+            form.atCustomerLocation || form.atProviderLocation ? 'text-ink/45' : 'text-amber-700'
+          "
+        >
+          Sélectionne au moins une option. Tu peux cocher les deux.
+        </p>
+      </fieldset>
     </div>
 
     <!-- Status -->

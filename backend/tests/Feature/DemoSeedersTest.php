@@ -6,6 +6,7 @@ use App\Models\Offer;
 use App\Models\Reservation;
 use Carbon\CarbonImmutable;
 use Database\Seeders\DatabaseSeeder;
+use Database\Seeders\DemoCatalog;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
@@ -52,12 +53,23 @@ class DemoSeedersTest extends TestCase
             'title' => 'Grand ménage d’un appartement',
             'city' => 'Marrakech',
             'service_duration_minutes' => 120,
+            'at_customer_location' => true,
+            'at_provider_location' => true,
             'status' => 'active',
         ]);
         $this->assertDatabaseHas('offers', [
             'title' => 'Réparation et réglage de vélo',
             'city' => 'Marrakech',
             'service_duration_minutes' => 90,
+            'at_customer_location' => false,
+            'at_provider_location' => true,
+            'status' => 'active',
+        ]);
+        $this->assertDatabaseHas('offers', [
+            'title' => 'Dépannage plomberie à domicile',
+            'city' => 'Rabat',
+            'at_customer_location' => true,
+            'at_provider_location' => false,
             'status' => 'active',
         ]);
         $this->assertDatabaseHas('users', ['email' => 'client@qribly.test']);

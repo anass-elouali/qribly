@@ -42,6 +42,8 @@ final class DemoCatalog
      *     status: 'active'|'reserved'|'sold'|'inactive',
      *     city: string,
      *     duration: int|null,
+     *     at_customer_location?: bool,
+     *     at_provider_location?: bool,
      *     latitude: float,
      *     longitude: float
      * }>
@@ -89,6 +91,8 @@ final class DemoCatalog
             'status' => 'active',
             'city' => 'Casablanca',
             'duration' => 60,
+            'at_customer_location' => false,
+            'at_provider_location' => true,
             'latitude' => 33.5896,
             'longitude' => -7.6201,
         ],
@@ -134,6 +138,8 @@ final class DemoCatalog
             'status' => 'active',
             'city' => 'Rabat',
             'duration' => 60,
+            'at_customer_location' => true,
+            'at_provider_location' => false,
             'latitude' => 34.0242,
             'longitude' => -6.8467,
         ],
@@ -245,6 +251,8 @@ final class DemoCatalog
      *     status: 'active',
      *     city: string,
      *     duration: int,
+     *     at_customer_location?: bool,
+     *     at_provider_location?: bool,
      *     latitude: float,
      *     longitude: float
      * }>
@@ -262,6 +270,8 @@ final class DemoCatalog
             'status' => 'active',
             'city' => 'Rabat',
             'duration' => 90,
+            'at_customer_location' => true,
+            'at_provider_location' => false,
             'latitude' => 34.0209,
             'longitude' => -6.8416,
         ],
@@ -322,6 +332,8 @@ final class DemoCatalog
             'status' => 'active',
             'city' => 'Marrakech',
             'duration' => 90,
+            'at_customer_location' => false,
+            'at_provider_location' => true,
             'latitude' => 31.6298,
             'longitude' => -7.9954,
         ],

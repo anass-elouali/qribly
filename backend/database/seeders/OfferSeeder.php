@@ -38,6 +38,10 @@ class OfferSeeder extends Seeder
                 'status' => $data['status'],
                 'city' => $data['city'],
                 'service_duration_minutes' => $data['duration'],
+                'at_customer_location' => $data['at_customer_location']
+                    ?? ($data['type'] === 'service'),
+                'at_provider_location' => $data['at_provider_location']
+                    ?? ($data['type'] === 'service'),
                 'location' => $location,
             ]);
             $offer->user()->associate($user);

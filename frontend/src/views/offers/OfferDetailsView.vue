@@ -22,6 +22,11 @@ import type { Conversation } from '@/types/conversation'
 import { statusLabel, statusColor, formatPrice } from '@/utils/offer'
 import { resolveStorageUrl } from '@/utils/url'
 import { extractErrorMessage, isNotFoundError } from '@/utils/errors'
+import {
+  dateTimeValueToApiDateTime,
+  inAppTimeZone,
+  parseDateTimeValue,
+} from '@/utils/dateTime'
 import { initials } from '@/utils/user'
 import FavoriteButton from '@/components/offers/FavoriteButton.vue'
 import OfferDetailsSkeleton from '@/components/offers/OfferDetailsSkeleton.vue'
@@ -57,7 +62,10 @@ const slotPicker = ref<{ refresh: () => Promise<void> } | null>(null)
 const NOTES_MAX_LENGTH = 1000
 
 function nextReservableMinute() {
-  return dayjs().add(1, 'minute').startOf('minute').format('YYYY-MM-DDTHH:mm')
+  return inAppTimeZone(new Date().toISOString())
+    .add(1, 'minute')
+    .startOf('minute')
+    .format('YYYY-MM-DDTHH:mm')
 }
 
 const minScheduledAt = ref(nextReservableMinute())
@@ -71,7 +79,7 @@ const scheduledAtError = computed(() => {
     return 'Choisis une date et une heure.'
   }
 
-  const selectedDate = dayjs(scheduledAt.value)
+  const selectedDate = parseDateTimeValue(scheduledAt.value)
 
   if (!selectedDate.isValid() || !selectedDate.isAfter(dayjs())) {
     return 'Choisis une date et une heure à venir.'
@@ -212,7 +220,7 @@ async function submitReservation() {
 
   try {
     await api.post(`/offers/${offer.value.id}/reservations`, {
-      scheduled_at: dayjs(scheduledAt.value).toISOString(),
+      scheduled_at: dateTimeValueToApiDateTime(scheduledAt.value),
       notes: notes.value || undefined,
     })
 
@@ -407,6 +415,18 @@ watch(
             <span v-if="offer.type === 'service'" class="offer-detail-chip">
               <Clock3 :size="15" aria-hidden="true" />
               {{ formatServiceDuration(offer.service_duration_minutes) }}
+            </span>
+            <span
+              v-if="offer.type === 'service' && offer.at_customer_location"
+              class="offer-detail-chip"
+            >
+              Chez le client
+            </span>
+            <span
+              v-if="offer.type === 'service' && offer.at_provider_location"
+              class="offer-detail-chip"
+            >
+              Chez le prestataire
             </span>
           </div>
 

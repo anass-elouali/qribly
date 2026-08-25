@@ -35,6 +35,8 @@ class OfferTest extends TestCase
             'is_negotiable' => false,
             'status' => 'active',
             'city' => $city,
+            'at_customer_location' => true,
+            'at_provider_location' => true,
         ]);
 
         $offer->user()->associate($provider);
@@ -172,6 +174,8 @@ class OfferTest extends TestCase
                 'description' => 'Une description assez complète pour le service de test.',
                 'type' => 'service',
                 'service_duration_minutes' => 60,
+                'at_customer_location' => true,
+                'at_provider_location' => false,
                 'price' => 200,
                 'is_negotiable' => false,
                 'status' => 'active',
@@ -181,12 +185,46 @@ class OfferTest extends TestCase
                 ],
             ])
             ->assertCreated()
-            ->assertJsonPath('data.city', 'Marrakech');
+            ->assertJsonPath('data.city', 'Marrakech')
+            ->assertJsonPath('data.at_customer_location', true)
+            ->assertJsonPath('data.at_provider_location', false);
 
         $this->assertDatabaseHas('offers', [
             'title' => 'Nettoyage test',
             'city' => 'Marrakech',
+            'at_customer_location' => true,
+            'at_provider_location' => false,
         ]);
+    }
+
+    public function test_service_offer_requires_at_least_one_location_mode(): void
+    {
+        $provider = User::factory()->create();
+        $category = Category::create(['name' => 'Services à domicile']);
+
+        $this
+            ->actingAs($provider)
+            ->postJson('/api/offers', [
+                'category_id' => $category->id,
+                'title' => 'Service sans lieu',
+                'description' => 'Cette annonce doit être refusée sans lieu de prestation.',
+                'type' => 'service',
+                'service_duration_minutes' => 60,
+                'at_customer_location' => false,
+                'at_provider_location' => false,
+                'price' => 200,
+                'is_negotiable' => false,
+                'status' => 'active',
+                'city' => 'Marrakech',
+                'location' => [
+                    'latitude' => 31.6295,
+                    'longitude' => -7.9811,
+                ],
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['at_customer_location']);
+
+        $this->assertDatabaseCount('offers', 0);
     }
 
     public function test_offer_pagination_does_not_repeat_offers_with_the_same_creation_date(): void
@@ -285,7 +323,9 @@ class OfferTest extends TestCase
                     'longitude' => -5.013564,
                 ],
                 'images' => [
-                    UploadedFile::fake()->createWithContent('faux.jpg', 'Ceci n’est pas une image.'),
+                    UploadedFile::fake()
+                        ->createWithContent('faux.jpg', 'Ceci n’est pas une image.')
+                        ->mimeType('text/plain'),
                 ],
             ], [
                 'Accept' => 'application/json',
@@ -293,9 +333,11 @@ class OfferTest extends TestCase
 
         $response
             ->assertUnprocessable()
-            ->assertJsonPath(
-                'errors.images.0.0',
-                'Chaque photo doit être au format JPG, PNG, WEBP ou AVIF.'
-            );
+            ->assertJsonValidationErrors(['images.0']);
+
+        $this->assertContains(
+            'Chaque photo doit être au format JPG, PNG, WEBP ou AVIF.',
+            $response->json('errors')['images.0'],
+        );
     }
 }

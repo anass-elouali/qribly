@@ -72,6 +72,8 @@ const offerInfo = ref<OfferInfoData>({
   isNegotiable: false,
   status: 'active',
   serviceDurationMinutes: 60,
+  atCustomerLocation: false,
+  atProviderLocation: false,
 })
 
 /*
@@ -166,6 +168,8 @@ async function loadOfferForEdit() {
     isNegotiable: offer.is_negotiable,
     status: offer.status,
     serviceDurationMinutes: offer.service_duration_minutes ?? 60,
+    atCustomerLocation: offer.at_customer_location,
+    atProviderLocation: offer.at_provider_location,
   }
 
   location.value = {
@@ -246,6 +250,12 @@ async function handleSubmit() {
         service_duration_minutes:
           offerInfo.value.type === 'service' ? offerInfo.value.serviceDurationMinutes : null,
 
+        at_customer_location:
+          offerInfo.value.type === 'service' && offerInfo.value.atCustomerLocation,
+
+        at_provider_location:
+          offerInfo.value.type === 'service' && offerInfo.value.atProviderLocation,
+
         city: location.value.city,
 
         location: {
@@ -312,6 +322,8 @@ async function handleSubmit() {
 
     if (offerInfo.value.type === 'service') {
       formData.append('service_duration_minutes', String(offerInfo.value.serviceDurationMinutes))
+      formData.append('at_customer_location', offerInfo.value.atCustomerLocation ? '1' : '0')
+      formData.append('at_provider_location', offerInfo.value.atProviderLocation ? '1' : '0')
     }
 
     formData.append('location[latitude]', String(location.value.latitude))

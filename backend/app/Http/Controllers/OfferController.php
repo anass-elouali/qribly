@@ -9,7 +9,9 @@ use App\Http\Requests\StoreOfferRequest;
 use App\Http\Requests\UpdateOfferRequest;
 use App\Http\Resources\OfferResource;
 use App\Models\Offer;
+use App\Notifications\ServiceRequestPublished;
 use App\Services\SemanticOfferRankingService;
+use App\Services\ServiceRequestMatchingService;
 use App\Support\MoroccanCities;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -72,9 +74,12 @@ class OfferController extends Controller
     /**
      * Store a newly created resource in storage.
      */
-    public function store(StoreOfferRequest $request)
-    {
+    public function store(
+        StoreOfferRequest $request,
+        ServiceRequestMatchingService $matchingService,
+    ) {
         $data = $request->validated();
+        $data = $this->normalizeServiceLocations($data);
 
         // Extract location
         $latitude = $data['location']['latitude'];
@@ -107,6 +112,8 @@ class OfferController extends Controller
             ]);
         }
 
+        $this->refreshMatchesAndNotify($offer, $matchingService);
+
         // Load relationships
         $offer->load([
             'category',
@@ -135,11 +142,15 @@ class OfferController extends Controller
     /**
      * Update the specified resource in storage.
      */
-    public function update(UpdateOfferRequest $request, Offer $offer)
-    {
+    public function update(
+        UpdateOfferRequest $request,
+        Offer $offer,
+        ServiceRequestMatchingService $matchingService,
+    ) {
         $this->authorize('update', $offer);
 
         $data = $request->validated();
+        $data = $this->normalizeServiceLocations($data);
 
         if (isset($data['location'])) {
             $latitude = $data['location']['latitude'];
@@ -158,6 +169,19 @@ class OfferController extends Controller
 
         $offer->update($data);
 
+        if ($offer->wasChanged([
+            'category_id',
+            'title',
+            'description',
+            'type',
+            'status',
+            'city',
+            'at_customer_location',
+            'at_provider_location',
+        ])) {
+            $this->refreshMatchesAndNotify($offer, $matchingService);
+        }
+
         $offer = Offer::withLocationCoordinates()
             ->with(['category', 'user', 'offerImages'])
             ->findOrFail($offer->id);
@@ -168,17 +192,27 @@ class OfferController extends Controller
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy(Offer $offer)
-    {
+    public function destroy(
+        Offer $offer,
+        ServiceRequestMatchingService $matchingService,
+    ) {
         $this->authorize('delete', $offer);
 
-        $offer->load('offerImages');
+        $offer->load(['offerImages', 'user']);
+        $previouslyMatchedRequestIds = $offer->serviceRequestMatches()
+            ->pluck('service_request_id')
+            ->all();
 
         foreach ($offer->offerImages as $image) {
             Storage::disk('public')->delete($image->path);
         }
 
         $offer->delete();
+        $this->refreshMatchesAndNotify(
+            $offer,
+            $matchingService,
+            $previouslyMatchedRequestIds,
+        );
 
         return response()->json([
             'message' => 'Offer deleted successfully',
@@ -245,5 +279,32 @@ class OfferController extends Controller
                     'candidate_count' => $offers->count(),
                 ],
             ]);
+    }
+
+    private function normalizeServiceLocations(array $data): array
+    {
+        if (($data['type'] ?? null) !== 'service') {
+            $data['service_duration_minutes'] = null;
+            $data['at_customer_location'] = false;
+            $data['at_provider_location'] = false;
+        }
+
+        return $data;
+    }
+
+    /** @param array<int, int> $previouslyMatchedRequestIds */
+    private function refreshMatchesAndNotify(
+        Offer $offer,
+        ServiceRequestMatchingService $matchingService,
+        array $previouslyMatchedRequestIds = [],
+    ): void {
+        $newlyMatchedRequests = $matchingService->refreshProviderMatchesForOffer(
+            $offer,
+            $previouslyMatchedRequestIds,
+        );
+
+        foreach ($newlyMatchedRequests as $serviceRequest) {
+            $offer->user->notify(new ServiceRequestPublished($serviceRequest));
+        }
     }
 }
