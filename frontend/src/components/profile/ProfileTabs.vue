@@ -1,5 +1,12 @@
 <script setup lang="ts">
-type Tab = 'offers' | 'favorites' | 'reservations' | 'provider'
+type Tab =
+  | 'offers'
+  | 'favorites'
+  | 'reservations'
+  | 'service-requests'
+  | 'availability'
+  | 'requests'
+  | 'provider'
 
 defineProps<{
   tabs: {

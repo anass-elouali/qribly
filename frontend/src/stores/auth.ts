@@ -22,9 +22,7 @@ interface LoginResponse {
 export const useAuthStore = defineStore('auth', () => {
   const user = ref<User | null>(null)
 
-  const token = ref<string | null>(
-    localStorage.getItem('qribly_token')
-  )
+  const token = ref<string | null>(localStorage.getItem('qribly_token'))
 
   const isAuthenticated = computed(() => {
     return token.value !== null
@@ -39,13 +37,15 @@ export const useAuthStore = defineStore('auth', () => {
     user.value = response.data.user
     token.value = response.data.token
 
-    localStorage.setItem(
-      'qribly_token',
-      response.data.token
-    )
+    localStorage.setItem('qribly_token', response.data.token)
   }
 
-  async function register(name: string, email: string, password: string, passwordConfirmation: string) {
+  async function register(
+    name: string,
+    email: string,
+    password: string,
+    passwordConfirmation: string,
+  ) {
     const response = await api.post<LoginResponse>('/register', {
       name,
       email,
@@ -56,10 +56,7 @@ export const useAuthStore = defineStore('auth', () => {
     user.value = response.data.user
     token.value = response.data.token
 
-    localStorage.setItem(
-      'qribly_token',
-      response.data.token
-    )
+    localStorage.setItem('qribly_token', response.data.token)
   }
 
   async function restoreAuthentication() {
@@ -77,6 +74,17 @@ export const useAuthStore = defineStore('auth', () => {
 
       localStorage.removeItem('qribly_token')
     }
+  }
+
+  async function updateProfile(name: string, email: string) {
+    const response = await api.patch<User>('/user', {
+      name,
+      email,
+    })
+
+    user.value = response.data
+
+    return response.data
   }
 
   async function logout() {
@@ -101,6 +109,7 @@ export const useAuthStore = defineStore('auth', () => {
     login,
     register,
     restoreAuthentication,
+    updateProfile,
     logout,
   }
 })

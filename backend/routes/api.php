@@ -99,5 +99,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::patch('messages/{message}/read', [MessageController::class, 'markAsRead']);
 
     Route::get('user', [AuthController::class, 'user']);
+    Route::patch('user', [AuthController::class, 'updateProfile']);
     Route::post('logout', [AuthController::class, 'logout']);
 });
