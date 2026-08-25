@@ -12,23 +12,37 @@ import ProfileTabs from '@/components/profile/ProfileTabs.vue'
 import ProfileOffers from '@/components/profile/ProfileOffers.vue'
 import ProfileFavorites from '@/components/profile/ProfileFavorites.vue'
 import ProfileReservations from '@/components/profile/ProfileReservations.vue'
+import ProfileServiceRequests from '@/components/profile/ProfileServiceRequests.vue'
+import ProviderAvailabilityEditor from '@/components/profile/ProviderAvailabilityEditor.vue'
+import ProfileProviderRequests from '@/components/profile/ProfileProviderRequests.vue'
 import ProfileProviderReservations from '@/components/profile/ProfileProviderReservations.vue'
 import OfferGridSkeleton from '@/components/offers/OfferGridSkeleton.vue'
 import AsyncStatePanel from '@/components/ui/AsyncStatePanel.vue'
 
 import type { Offer, PaginatedResponse } from '@/types/offer'
 import type { ProviderReservationAction, Reservation } from '@/types/reservation'
+import type { ServiceRequest, ServiceRequestProposal } from '@/types/serviceRequest'
 
 const route = useRoute()
 const authStore = useAuthStore()
 const favoritesStore = useFavoritesStore()
 
-type Tab = 'offers' | 'favorites' | 'reservations' | 'provider'
+type Tab =
+  | 'offers'
+  | 'favorites'
+  | 'reservations'
+  | 'service-requests'
+  | 'availability'
+  | 'requests'
+  | 'provider'
 
 const tabs: { key: Tab; label: string }[] = [
   { key: 'offers', label: 'Mes annonces' },
   { key: 'favorites', label: 'Mes favoris' },
   { key: 'reservations', label: 'Mes réservations' },
+  { key: 'service-requests', label: 'Mes demandes' },
+  { key: 'availability', label: 'Mes disponibilités' },
+  { key: 'requests', label: 'Demandes compatibles' },
   { key: 'provider', label: 'Réservations reçues' },
 ]
 
@@ -41,6 +55,8 @@ const activeTab = ref<Tab>(initialTab)
 const myOffers = ref<Offer[]>([])
 const favorites = ref<Offer[]>([])
 const reservations = ref<Reservation[]>([])
+const myServiceRequests = ref<ServiceRequest[]>([])
+const providerRequests = ref<ServiceRequest[]>([])
 const providerReservations = ref<Reservation[]>([])
 
 const loading = ref(false)
@@ -87,10 +103,22 @@ async function fetchTabData(tab: Tab) {
     reservations.value = response.data.data
   }
 
+  if (tab === 'service-requests') {
+    const response = await api.get<PaginatedResponse<ServiceRequest>>('/service-requests')
+
+    myServiceRequests.value = response.data.data
+  }
+
   if (tab === 'provider') {
     const response = await api.get<PaginatedResponse<Reservation>>('/provider/reservations')
 
     providerReservations.value = response.data.data
+  }
+
+  if (tab === 'requests') {
+    const response = await api.get<PaginatedResponse<ServiceRequest>>('/provider/service-requests')
+
+    providerRequests.value = response.data.data
   }
 }
 
@@ -305,6 +333,20 @@ async function providerAction(id: number, action: ProviderReservationAction) {
 
 /*
 |--------------------------------------------------------------------------
+| Provider service requests
+|--------------------------------------------------------------------------
+*/
+
+function handleProposalUpdated(serviceRequestId: number, proposal: ServiceRequestProposal) {
+  const request = providerRequests.value.find((item) => item.id === serviceRequestId)
+
+  if (request) {
+    request.proposals = [proposal]
+  }
+}
+
+/*
+|--------------------------------------------------------------------------
 | Profile stats
 |--------------------------------------------------------------------------
 */
@@ -382,6 +424,19 @@ onMounted(() => {
         @cancel="cancelReservation"
         @review-submitted="handleReviewSubmitted"
       />
+
+      <ProfileServiceRequests
+        v-else-if="activeTab === 'service-requests'"
+        :requests="myServiceRequests"
+      />
+
+      <ProfileProviderRequests
+        v-else-if="activeTab === 'requests'"
+        :requests="providerRequests"
+        @proposal-updated="handleProposalUpdated"
+      />
+
+      <ProviderAvailabilityEditor v-else-if="activeTab === 'availability'" />
 
       <ProfileProviderReservations
         v-else

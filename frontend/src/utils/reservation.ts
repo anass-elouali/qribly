@@ -1,6 +1,7 @@
 import dayjs from 'dayjs'
 
 import type { Reservation } from '@/types/reservation'
+import { inAppTimeZone } from '@/utils/dateTime'
 
 export const reservationStatusLabel: Record<string, string> = {
   pending: 'En attente',
@@ -32,7 +33,10 @@ export function formatReservationDuration(minutes: number | null | undefined) {
 export function reservationEndsAt(
   reservation: Pick<Reservation, 'scheduled_at' | 'duration_minutes'>,
 ) {
-  return dayjs(reservation.scheduled_at).add(reservation.duration_minutes ?? 60, 'minute')
+  return inAppTimeZone(reservation.scheduled_at).add(
+    reservation.duration_minutes ?? 60,
+    'minute',
+  )
 }
 
 export function canCompleteReservation(

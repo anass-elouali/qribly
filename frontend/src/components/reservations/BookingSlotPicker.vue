@@ -5,12 +5,16 @@ import { CalendarDays, Clock3, RotateCcw } from 'lucide-vue-next'
 
 import api from '@/services/api'
 import type { OfferAvailabilityResponse } from '@/types/reservation'
+import { inAppTimeZone } from '@/utils/dateTime'
 import { extractErrorMessage } from '@/utils/errors'
 
 const props = defineProps<{
   offerId: number
   modelValue: string
   minScheduledAt: string
+  maxScheduledAt?: string
+  windowStartAt?: string
+  windowEndAt?: string
   errorMessage?: string
 }>()
 
@@ -25,9 +29,26 @@ const loading = ref(true)
 const loadError = ref('')
 let requestSequence = 0
 
-const bookableDays = computed(() =>
-  (availability.value?.days ?? []).filter((day) => day.slots.length > 0),
-)
+const filteredDays = computed(() => {
+  const duration = availability.value?.duration_minutes ?? 60
+  const windowStart = props.windowStartAt ? dayjs(props.windowStartAt) : null
+  const windowEnd = props.windowEndAt ? dayjs(props.windowEndAt) : null
+
+  return (availability.value?.days ?? []).map((day) => ({
+    ...day,
+    slots: day.slots.filter((slot) => {
+      const startsAt = dayjs(slot.starts_at)
+      const endsAt = startsAt.add(duration, 'minute')
+
+      return (
+        (!windowStart || !startsAt.isBefore(windowStart)) &&
+        (!windowEnd || !endsAt.isAfter(windowEnd))
+      )
+    }),
+  }))
+})
+
+const bookableDays = computed(() => filteredDays.value.filter((day) => day.slots.length > 0))
 
 const selectedDay = computed(
   () => bookableDays.value.find((day) => day.date === selectedDate.value) ?? null,
@@ -47,8 +68,31 @@ const durationLabel = computed(() => {
 })
 
 function formatDate(date: string) {
-  const formatted = dayjs(date).format('ddd D MMM')
+  const formatted = dayjs.tz(date, availability.value?.timezone ?? 'Africa/Casablanca').format(
+    'ddd D MMM',
+  )
   return formatted.charAt(0).toUpperCase() + formatted.slice(1)
+}
+
+function isSelectedSlot(startsAt: string): boolean {
+  return Boolean(props.modelValue) && dayjs(startsAt).valueOf() === dayjs(props.modelValue).valueOf()
+}
+
+function availabilityRange(): { from: string; days: number } {
+  if (!props.windowStartAt || !props.windowEndAt) {
+    return {
+      from: inAppTimeZone(new Date().toISOString()).format('YYYY-MM-DD'),
+      days: 14,
+    }
+  }
+
+  const start = inAppTimeZone(props.windowStartAt).startOf('day')
+  const end = inAppTimeZone(props.windowEndAt).startOf('day')
+
+  return {
+    from: start.format('YYYY-MM-DD'),
+    days: Math.min(31, Math.max(1, end.diff(start, 'day') + 1)),
+  }
 }
 
 function selectSlot(startsAt: string) {
@@ -70,13 +114,11 @@ async function loadAvailability() {
   loadError.value = ''
 
   try {
+    const range = availabilityRange()
     const response = await api.get<OfferAvailabilityResponse>(
       `/offers/${props.offerId}/availability`,
       {
-        params: {
-          from: dayjs().format('YYYY-MM-DD'),
-          days: 14,
-        },
+        params: range,
       },
     )
 
@@ -86,14 +128,18 @@ async function loadAvailability() {
 
     availability.value = response.data
 
-    const firstDate = response.data.days.find((day) => day.slots.length > 0)?.date ?? ''
-    const selectedStillExists = response.data.days.some(
+    const modelDate = props.modelValue
+      ? inAppTimeZone(dayjs(props.modelValue).toISOString()).format('YYYY-MM-DD')
+      : ''
+    const candidateDate = selectedDate.value || modelDate
+    const firstDate = bookableDays.value[0]?.date ?? ''
+    const selectedStillExists = bookableDays.value.some(
       (day) =>
-        day.date === selectedDate.value &&
-        day.slots.some((slot) => slot.starts_at === props.modelValue),
+        day.date === candidateDate &&
+        day.slots.some((slot) => isSelectedSlot(slot.starts_at)),
     )
 
-    selectedDate.value = selectedStillExists ? selectedDate.value : firstDate
+    selectedDate.value = selectedStillExists ? candidateDate : firstDate
 
     if (response.data.configured && !selectedStillExists && props.modelValue) {
       emit('update:modelValue', '')
@@ -112,7 +158,11 @@ async function loadAvailability() {
   }
 }
 
-watch(() => props.offerId, loadAvailability, { immediate: true })
+watch(
+  () => [props.offerId, props.windowStartAt, props.windowEndAt],
+  loadAvailability,
+  { immediate: true },
+)
 
 defineExpose({ refresh: loadAvailability })
 </script>
@@ -189,11 +239,11 @@ defineExpose({ refresh: loadAvailability })
           type="button"
           class="rounded-lg border px-2 py-2.5 font-mono text-xs font-semibold transition"
           :class="
-            modelValue === slot.starts_at
+            isSelectedSlot(slot.starts_at)
               ? 'border-accent bg-accent text-ink'
               : 'border-ink/10 bg-ground text-ink/70 hover:border-primary hover:text-primary'
           "
-          :aria-pressed="modelValue === slot.starts_at"
+          :aria-pressed="isSelectedSlot(slot.starts_at)"
           @click="selectSlot(slot.starts_at)"
         >
           {{ slot.time }}
@@ -205,9 +255,15 @@ defineExpose({ refresh: loadAvailability })
         class="rounded-lg border border-dashed border-ink/15 bg-ground px-4 py-5 text-center"
       >
         <CalendarDays :size="22" class="mx-auto text-ink/30" aria-hidden="true" />
-        <p class="mt-2 font-body text-sm font-semibold text-ink">Aucun créneau prochainement</p>
+        <p class="mt-2 font-body text-sm font-semibold text-ink">
+          {{ windowStartAt ? 'Aucun créneau dans la période demandée' : 'Aucun créneau prochainement' }}
+        </p>
         <p class="mt-1 font-body text-xs leading-5 text-ink/50">
-          Le prestataire n’a pas de créneau libre dans les 14 prochains jours.
+          {{
+            windowStartAt
+              ? 'Les disponibilités du prestataire ne correspondent pas aux horaires du client.'
+              : 'Le prestataire n’a pas de créneau libre dans les 14 prochains jours.'
+          }}
         </p>
       </div>
 
@@ -223,13 +279,14 @@ defineExpose({ refresh: loadAvailability })
         :value="modelValue"
         type="datetime-local"
         :min="minScheduledAt"
+        :max="maxScheduledAt"
         class="w-full rounded-lg border border-ink/15 bg-ground px-3 py-2 font-body outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
         :class="errorMessage ? '!border-status-reserved' : ''"
         :aria-invalid="Boolean(errorMessage)"
         @input="emit('update:modelValue', ($event.target as HTMLInputElement).value)"
         @blur="emit('touch')"
       />
-      <p class="mt-1 font-body text-xs text-ink/45">Heure locale de ton appareil.</p>
+      <p class="mt-1 font-body text-xs text-ink/45">Heure du Maroc.</p>
     </div>
 
     <p v-if="errorMessage" class="mt-1 font-body text-xs text-status-reserved" role="alert">

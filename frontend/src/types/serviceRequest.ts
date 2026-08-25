@@ -22,9 +22,17 @@ export interface ServiceRequestInterpretationResponse {
   }
 }
 
+export interface ServiceRequestMatchedOffer {
+  id: number
+  title: string
+  price: string
+  city: string | null
+  service_duration_minutes: number | null
+}
+
 export interface ServiceRequest {
   id: number
-  raw_text: string
+  raw_text?: string
   summary: string
   city: string
   desired_start_at: string
@@ -34,6 +42,11 @@ export interface ServiceRequest {
   status: 'open' | 'fulfilled' | 'cancelled'
   expires_at: string
   category: Category
+  customer?: {
+    id: number
+    name: string
+  }
+  matched_offer?: ServiceRequestMatchedOffer | null
   proposals?: ServiceRequestProposal[]
   proposals_count?: number
   created_at: string

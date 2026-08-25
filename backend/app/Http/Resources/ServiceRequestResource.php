@@ -25,6 +25,17 @@ class ServiceRequestResource extends JsonResource
             'expires_at' => $this->expires_at,
             'category' => CategoryResource::make($this->whenLoaded('category')),
             'customer' => UserResource::make($this->whenLoaded('user')),
+            'matched_offer' => $this->whenLoaded('matches', function () {
+                $offer = $this->matches->first()?->offer;
+
+                return $offer ? [
+                    'id' => $offer->id,
+                    'title' => $offer->title,
+                    'price' => $offer->price,
+                    'city' => $offer->city,
+                    'service_duration_minutes' => $offer->service_duration_minutes,
+                ] : null;
+            }),
             'proposals' => ServiceRequestProposalResource::collection(
                 $this->whenLoaded('proposals')
             ),

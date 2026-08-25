@@ -27,6 +27,11 @@ class ProviderServiceRequestController extends Controller
             ->with([
                 'category',
                 'user',
+                'matches' => function ($query) use ($provider) {
+                    $query
+                        ->where('provider_id', $provider->id)
+                        ->with('offer');
+                },
                 'proposals' => function ($query) use ($provider) {
                     $query
                         ->where('provider_id', $provider->id)

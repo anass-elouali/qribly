@@ -12,6 +12,7 @@ import {
   reservationStatusLabel,
 } from '@/utils/reservation'
 import { initials } from '@/utils/user'
+import { inAppTimeZone } from '@/utils/dateTime'
 
 const props = defineProps<{
   reservation: Reservation
@@ -188,7 +189,7 @@ onBeforeUnmount(() => {
                 <p class="font-mono text-[0.6rem] text-ink/40 uppercase">Date</p>
 
                 <p class="mt-1 font-body font-semibold text-ink">
-                  {{ dayjs(reservation.scheduled_at).format('DD MMM YYYY') }}
+                  {{ inAppTimeZone(reservation.scheduled_at).format('DD MMM YYYY') }}
                 </p>
               </div>
 
@@ -196,7 +197,7 @@ onBeforeUnmount(() => {
                 <p class="font-mono text-[0.6rem] text-ink/40 uppercase">Heure</p>
 
                 <p class="mt-1 font-body font-semibold text-ink">
-                  {{ dayjs(reservation.scheduled_at).format('HH:mm') }}
+                  {{ inAppTimeZone(reservation.scheduled_at).format('HH:mm') }}
                 </p>
               </div>
             </div>

@@ -10,6 +10,7 @@ import {
   reservationStatusLabel,
 } from '@/utils/reservation'
 import { initials } from '@/utils/user'
+import { inAppTimeZone } from '@/utils/dateTime'
 
 const props = defineProps<{
   reservation: Reservation
@@ -91,11 +92,11 @@ defineEmits<{
         <p class="font-mono text-[0.65rem] tracking-wide text-ink/40 uppercase">Rendez-vous</p>
 
         <p class="mt-1 font-body font-semibold text-ink">
-          {{ dayjs(reservation.scheduled_at).format('DD MMM YYYY') }}
+          {{ inAppTimeZone(reservation.scheduled_at).format('DD MMM YYYY') }}
         </p>
 
         <p class="mt-0.5 font-mono text-xs text-ink/50">
-          {{ dayjs(reservation.scheduled_at).format('HH:mm') }} ·
+          {{ inAppTimeZone(reservation.scheduled_at).format('HH:mm') }} ·
           {{ formatReservationDuration(reservation.duration_minutes) }}
         </p>
       </div>

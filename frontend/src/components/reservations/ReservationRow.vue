@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import dayjs from 'dayjs'
 import type { Reservation } from '@/types/reservation'
 import {
   formatReservationDuration,
   reservationStatusColor,
   reservationStatusLabel,
 } from '@/utils/reservation'
+import { inAppTimeZone } from '@/utils/dateTime'
 
 defineProps<{
   reservation: Reservation
@@ -26,7 +26,7 @@ defineProps<{
         </RouterLink>
         <p v-else class="font-body font-semibold text-ink">Annonce supprimée</p>
         <p class="mt-0.5 font-mono text-xs text-ink/50">
-          {{ dayjs(reservation.scheduled_at).format('ddd D MMM YYYY [à] HH:mm') }}
+          {{ inAppTimeZone(reservation.scheduled_at).format('ddd D MMM YYYY [à] HH:mm') }}
           · {{ formatReservationDuration(reservation.duration_minutes) }}
           <span v-if="personLabel"> · {{ personLabel }}</span>
         </p>

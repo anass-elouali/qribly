@@ -31,6 +31,11 @@ import type {
   ServiceRequestInterpretation,
   ServiceRequestMissingField,
 } from '@/types/serviceRequest'
+import {
+  apiDateTimeToLocalInput,
+  localInputToApiDateTime,
+  parseAppLocalDateTime,
+} from '@/utils/dateTime'
 import { extractErrorMessage } from '@/utils/errors'
 
 const totalSteps = 4
@@ -93,10 +98,6 @@ function chooseExample(example: string) {
   error.value = ''
 }
 
-function toDateTimeLocal(value: string | null): string {
-  return value ? dayjs(value).format('YYYY-MM-DDTHH:mm') : ''
-}
-
 function questionFor(field: ServiceRequestMissingField): string {
   const questions: Record<ServiceRequestMissingField, string> = {
     category_id: 'Quel type de service recherches-tu ?',
@@ -143,8 +144,8 @@ function applyInterpretation(data: ServiceRequestInterpretation) {
   }
 
   if (data.desired_start_at && data.desired_end_at) {
-    desiredStartAt.value = toDateTimeLocal(data.desired_start_at)
-    desiredEndAt.value = toDateTimeLocal(data.desired_end_at)
+    desiredStartAt.value = apiDateTimeToLocalInput(data.desired_start_at)
+    desiredEndAt.value = apiDateTimeToLocalInput(data.desired_end_at)
   }
 
   if (data.budget_max !== null) {
@@ -219,8 +220,8 @@ function validateField(field: ServiceRequestMissingField): string | null {
       return 'Indique le début et la fin de la période souhaitée.'
     }
 
-    const start = dayjs(desiredStartAt.value)
-    const end = dayjs(desiredEndAt.value)
+    const start = parseAppLocalDateTime(desiredStartAt.value)
+    const end = parseAppLocalDateTime(desiredEndAt.value)
 
     if (!start.isAfter(dayjs())) return 'La période doit commencer dans le futur.'
     if (!end.isAfter(start)) return 'La fin doit être postérieure au début.'
@@ -316,8 +317,8 @@ async function publish() {
       summary: summary.value.trim(),
       category_id: categoryId.value!,
       city: city.value!.name,
-      desired_start_at: new Date(desiredStartAt.value).toISOString(),
-      desired_end_at: new Date(desiredEndAt.value).toISOString(),
+      desired_start_at: localInputToApiDateTime(desiredStartAt.value),
+      desired_end_at: localInputToApiDateTime(desiredEndAt.value),
       budget_max: budget ? Number(budget) : null,
       at_home: atHome.value!,
     })
