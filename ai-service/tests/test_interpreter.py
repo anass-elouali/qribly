@@ -255,6 +255,54 @@ class ServiceRequestInterpreterTest(unittest.TestCase):
         self.assertEqual("local", result.meta.interpreter)
         self.assertEqual("Rabat", result.data.city)
 
+    def test_finalization_ignores_llm_at_home_guess_without_explicit_textual_evidence(
+        self,
+    ) -> None:
+        request = self.request(
+            "Je cherche une coiffeuse à Rabat demain matin pour un mariage."
+        )
+        draft = LlmInterpretationDraft(
+            summary="Réserver une coiffeuse à Rabat demain matin pour un mariage.",
+            category_id=1,
+            category_name="Services à domicile",
+            city="Rabat",
+            desired_start_at=self.now + timedelta(days=1),
+            desired_end_at=self.now + timedelta(days=1, hours=2),
+            budget_max=None,
+            at_home=False,
+        )
+
+        result = _finalize_interpretation(request, draft)
+
+        self.assertIsNone(result.at_home)
+        self.assertIn("at_home", result.missing_fields)
+        self.assertIn(
+            "Le prestataire doit-il se déplacer à domicile ?",
+            result.questions,
+        )
+
+    def test_finalization_trusts_the_local_extractor_over_a_conflicting_llm_guess(
+        self,
+    ) -> None:
+        request = self.request(
+            "Je cherche un plombier à Rabat demain, je passerai chez le prestataire."
+        )
+        draft = LlmInterpretationDraft(
+            summary="Réparer une fuite chez le prestataire à Rabat demain.",
+            category_id=1,
+            category_name="Services à domicile",
+            city="Rabat",
+            desired_start_at=self.now + timedelta(days=1),
+            desired_end_at=self.now + timedelta(days=1, hours=2),
+            budget_max=None,
+            at_home=True,
+        )
+
+        result = _finalize_interpretation(request, draft)
+
+        self.assertFalse(result.at_home)
+        self.assertEqual([], result.missing_fields)
+
     def test_rejects_category_and_city_values_outside_the_allowed_lists(self) -> None:
         request = self.request(
             "Je cherche un plombier à Rabat demain pour mon appartement."

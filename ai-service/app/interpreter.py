@@ -276,7 +276,7 @@ def _interpret_locally(request: InterpretServiceRequest) -> InterpretationData:
         desired_start_at=desired_start_at,
         desired_end_at=desired_end_at,
         budget_max=_extract_budget(request.raw_text),
-        at_home=_extract_at_home(request.raw_text),
+        at_home=None,  # _finalize_interpretation recomputes this from raw_text
     )
 
     return _finalize_interpretation(request, draft)
@@ -303,6 +303,11 @@ def _finalize_interpretation(
         draft.desired_end_at,
         request.current_time,
     )
+    # The LLM sometimes guesses at_home even without an explicit cue in the
+    # text, contradicting its own instructions. Since this field affects
+    # provider-location matching, only trust the deterministic local
+    # extractor rather than the LLM's draft value.
+    at_home = _extract_at_home(request.raw_text)
 
     missing_fields: list[str] = []
     if category_id is None:
@@ -311,7 +316,7 @@ def _finalize_interpretation(
         missing_fields.append("city")
     if start is None or end is None:
         missing_fields.append("desired_period")
-    if draft.at_home is None:
+    if at_home is None:
         missing_fields.append("at_home")
 
     return InterpretationData(
@@ -322,7 +327,7 @@ def _finalize_interpretation(
         desired_start_at=start,
         desired_end_at=end,
         budget_max=draft.budget_max,
-        at_home=draft.at_home,
+        at_home=at_home,
         missing_fields=missing_fields,
         questions=_questions_for_missing(missing_fields),
     )
@@ -389,7 +394,7 @@ def _extract_at_home(raw_text: str) -> bool | None:
     normalized = _normalize(raw_text)
     away_phrases = ["chez le prestataire", "sur place", "dans son atelier"]
     home_phrases = [
-        "a domicile",
+        "domicile",
         "chez moi",
         "a la maison",
         "mon appartement",
