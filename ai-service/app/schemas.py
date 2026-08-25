@@ -102,7 +102,7 @@ class InterpretationData(BaseModel):
 
 
 class InterpretationMeta(BaseModel):
-    interpreter: Literal["local", "openai"]
+    interpreter: Literal["local", "openai", "groq"]
 
 
 class InterpretServiceResponse(BaseModel):

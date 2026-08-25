@@ -18,7 +18,7 @@ export interface ServiceRequestInterpretation {
 export interface ServiceRequestInterpretationResponse {
   data: ServiceRequestInterpretation
   meta: {
-    interpreter: 'local' | 'openai'
+    interpreter: 'local' | 'openai' | 'groq'
   }
 }
 

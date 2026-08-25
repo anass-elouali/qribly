@@ -1,14 +1,17 @@
+import json
 import os
 import unittest
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import httpx
 
 from app.interpreter import (
+    LlmSettings,
     LlmInterpretationDraft,
     _finalize_interpretation,
+    _interpret_with_llm,
     interpret_service_request,
 )
 from app.schemas import CategoryOption, InterpretServiceRequest
@@ -118,13 +121,131 @@ class ServiceRequestInterpreterTest(unittest.TestCase):
         clear=True,
     )
     @patch("app.interpreter._classify_category")
-    @patch("app.interpreter._interpret_with_openai")
+    @patch("app.interpreter._interpret_with_llm")
     def test_openai_failure_falls_back_to_the_local_interpreter(
         self,
-        interpret_with_openai,
+        interpret_with_llm,
         classify_category,
     ) -> None:
-        interpret_with_openai.side_effect = httpx.ConnectError("unavailable")
+        interpret_with_llm.side_effect = httpx.ConnectError("unavailable")
+        classify_category.return_value = self.categories[0]
+
+        result = interpret_service_request(
+            self.request("Je cherche un plombier à Rabat demain à domicile.")
+        )
+
+        self.assertEqual("local", result.meta.interpreter)
+        self.assertEqual("Rabat", result.data.city)
+
+    @patch.dict(
+        os.environ,
+        {
+            "AI_PROVIDER": "groq",
+            "GROQ_API_KEY": "test-groq-key",
+        },
+        clear=True,
+    )
+    @patch("app.interpreter._interpret_with_llm")
+    def test_groq_configuration_uses_the_groq_interpreter(
+        self,
+        interpret_with_llm,
+    ) -> None:
+        interpret_with_llm.return_value = LlmInterpretationDraft(
+            summary="Réparer une fuite à domicile à Rabat demain.",
+            category_id=1,
+            category_name="Services à domicile",
+            city="Rabat",
+            desired_start_at=self.now + timedelta(days=1),
+            desired_end_at=self.now + timedelta(days=1, hours=2),
+            budget_max=Decimal("300"),
+            at_home=True,
+        )
+
+        result = interpret_service_request(
+            self.request("Je cherche un plombier à Rabat demain à domicile.")
+        )
+
+        settings = interpret_with_llm.call_args.args[1]
+        self.assertEqual("groq", settings.provider)
+        self.assertEqual("openai/gpt-oss-20b", settings.model)
+        self.assertEqual("https://api.groq.com/openai/v1", settings.base_url)
+        self.assertEqual("groq", result.meta.interpreter)
+
+    @patch("app.interpreter.httpx.Client")
+    def test_groq_request_omits_unsupported_openai_fields(self, client_class) -> None:
+        response = MagicMock()
+        response.json.return_value = {
+            "output": [
+                {
+                    "type": "message",
+                    "content": [
+                        {
+                            "type": "output_text",
+                            "text": json.dumps(
+                                {
+                                    "summary": "Réparer une fuite à domicile à Rabat demain.",
+                                    "category_id": 1,
+                                    "category_name": "Services à domicile",
+                                    "city": "Rabat",
+                                    "desired_start_at": "2026-08-25T08:00:00Z",
+                                    "desired_end_at": "2026-08-25T10:00:00Z",
+                                    "budget_max": 300,
+                                    "at_home": True,
+                                }
+                            ),
+                        }
+                    ],
+                }
+            ]
+        }
+        client = client_class.return_value.__enter__.return_value
+        client.post.return_value = response
+        settings = LlmSettings(
+            provider="groq",
+            api_key="test-groq-key",
+            model="openai/gpt-oss-20b",
+            base_url="https://api.groq.com/openai/v1",
+            timeout_seconds=20,
+        )
+
+        _interpret_with_llm(
+            self.request("Je cherche un plombier à Rabat demain à domicile."),
+            settings,
+        )
+
+        request_body = client.post.call_args.kwargs["json"]
+        self.assertNotIn("store", request_body)
+        self.assertNotIn("safety_identifier", request_body)
+        self.assertEqual({"effort": "low"}, request_body["reasoning"])
+        request_context = json.loads(request_body["input"])
+        self.assertIn(
+            "plomberie",
+            request_context["allowed_categories"][0]["examples"],
+        )
+        self.assertTrue(request_body["text"]["format"]["strict"])
+        schema = request_body["text"]["format"]["schema"]
+        self.assertNotIn("minLength", schema["properties"]["summary"])
+        self.assertNotIn(
+            "format",
+            schema["properties"]["desired_start_at"]["anyOf"][0],
+        )
+
+    @patch.dict(
+        os.environ,
+        {
+            "AI_PROVIDER": "groq",
+            "GROQ_API_KEY": "test-groq-key",
+        },
+        clear=True,
+    )
+    @patch("app.interpreter._classify_category")
+    @patch("app.interpreter._interpret_with_llm")
+    def test_groq_failure_falls_back_to_the_local_interpreter(
+        self,
+        interpret_with_llm,
+        classify_category,
+    ) -> None:
+        interpret_with_llm.side_effect = httpx.ConnectError("unavailable")
         classify_category.return_value = self.categories[0]
 
         result = interpret_service_request(

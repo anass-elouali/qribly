@@ -650,6 +650,26 @@ Sous Windows PowerShell :
 
 Le modèle `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` est téléchargé lors de la première utilisation.
 
+### Interprétation intelligente avec Groq
+
+Sans fournisseur distant, l’assistant utilise automatiquement l’interpréteur local. Pour activer Groq, créer un fichier `.env` à la racine du dépôt avec :
+
+```dotenv
+AI_PROVIDER=groq
+GROQ_API_KEY=gsk_remplacer_par_la_cle_du_projet
+GROQ_MODEL=openai/gpt-oss-20b
+GROQ_BASE_URL=https://api.groq.com/openai/v1
+AI_TIMEOUT_SECONDS=20
+```
+
+Ne jamais ajouter la clé réelle à Git. Après modification, redémarrer le service :
+
+```bash
+docker compose up -d --force-recreate ai-service
+```
+
+Si Groq est indisponible ou si son quota est dépassé, le service revient automatiquement à l’interpréteur local. La configuration OpenAI historique reste supportée avec `AI_PROVIDER=openai`, `OPENAI_API_KEY` et `OPENAI_MODEL`.
+
 ## API et structure du dépôt
 
 ### Structure

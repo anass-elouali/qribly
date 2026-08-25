@@ -84,7 +84,7 @@ class ServiceRequestInterpretationService
             'data.questions' => ['present', 'array', 'max:2'],
             'data.questions.*' => ['required', 'string', 'min:5', 'max:200'],
             'meta' => ['required', 'array'],
-            'meta.interpreter' => ['required', Rule::in(['local', 'openai'])],
+            'meta.interpreter' => ['required', Rule::in(['local', 'openai', 'groq'])],
         ]);
 
         if ($validator->fails()) {

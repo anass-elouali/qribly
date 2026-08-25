@@ -137,6 +137,22 @@ class ServiceRequestInterpretationTest extends TestCase
             ->assertJsonPath('data.missing_fields.1', 'desired_period');
     }
 
+    public function test_groq_interpreter_metadata_is_accepted(): void
+    {
+        $category = Category::create(['name' => 'Services à domicile']);
+        $payload = $this->validInterpretation($category);
+        $payload['meta']['interpreter'] = 'groq';
+        Http::fake(['*' => Http::response($payload, 200)]);
+
+        $this
+            ->actingAs(User::factory()->create())
+            ->postJson('/api/assistant/interpret-service-request', [
+                'raw_text' => 'Je cherche un plombier à Rabat demain.',
+            ])
+            ->assertSuccessful()
+            ->assertJsonPath('meta.interpreter', 'groq');
+    }
+
     public function test_untrusted_category_from_ai_service_is_rejected(): void
     {
         $category = Category::create(['name' => 'Services à domicile']);
