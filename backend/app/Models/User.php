@@ -53,6 +53,16 @@ class User extends Authenticatable
         return $this->hasMany(ProviderAvailability::class);
     }
 
+    public function serviceRequests(): HasMany
+    {
+        return $this->hasMany(ServiceRequest::class);
+    }
+
+    public function serviceRequestProposals(): HasMany
+    {
+        return $this->hasMany(ServiceRequestProposal::class, 'provider_id');
+    }
+
     public function reviews()
     {
         return $this->hasMany(Review::class);

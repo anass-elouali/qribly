@@ -66,4 +66,9 @@ class Offer extends Model
     {
         return $this->hasMany(Reservation::class);
     }
+
+    public function serviceRequestProposals(): HasMany
+    {
+        return $this->hasMany(ServiceRequestProposal::class);
+    }
 }

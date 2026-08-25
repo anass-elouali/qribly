@@ -21,6 +21,10 @@ class ReservationResource extends JsonResource
 
             'duration_minutes' => $this->duration_minutes,
 
+            'agreed_price' => $this->agreed_price,
+
+            'service_request_id' => $this->service_request_id,
+
             'status' => $this->status,
 
             'notes' => $this->notes,

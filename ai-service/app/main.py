@@ -2,8 +2,15 @@ import logging
 
 from fastapi import FastAPI, HTTPException, status
 
+from app.interpreter import interpret_service_request
 from app.ranking import rank_offers
-from app.schemas import HealthResponse, RankRequest, RankResponse
+from app.schemas import (
+    HealthResponse,
+    InterpretServiceRequest,
+    InterpretServiceResponse,
+    RankRequest,
+    RankResponse,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -11,8 +18,8 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title="Qribly AI Service",
-    version="0.2.0",
-    description="Semantic search service for Qribly.",
+    version="0.3.0",
+    description="Local semantic ranking and structured service-request interpretation for Qribly.",
 )
 
 
@@ -37,3 +44,19 @@ def rank(request: RankRequest) -> RankResponse:
         ) from exception
 
     return RankResponse(results=results)
+
+
+@app.post(
+    "/interpret-service-request",
+    response_model=InterpretServiceResponse,
+    tags=["service-requests"],
+)
+def interpret(request: InterpretServiceRequest) -> InterpretServiceResponse:
+    try:
+        return interpret_service_request(request)
+    except Exception as exception:
+        logger.exception("Service-request interpretation failed")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="The request interpreter is temporarily unavailable.",
+        ) from exception

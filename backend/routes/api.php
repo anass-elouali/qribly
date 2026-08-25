@@ -9,8 +9,12 @@ use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\OfferController;
 use App\Http\Controllers\OfferImageController;
 use App\Http\Controllers\ProviderAvailabilityController;
+use App\Http\Controllers\ProviderServiceRequestController;
 use App\Http\Controllers\ReservationController;
 use App\Http\Controllers\ReviewController;
+use App\Http\Controllers\ServiceRequestAssistantController;
+use App\Http\Controllers\ServiceRequestController;
+use App\Http\Controllers\ServiceRequestProposalController;
 use Illuminate\Support\Facades\Broadcast;
 use Illuminate\Support\Facades\Route;
 
@@ -48,6 +52,16 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('offers/{offer}/reservations', [ReservationController::class, 'store']);
     Route::patch('reservations/{reservation}/cancel', [ReservationController::class, 'cancel']);
 
+    // Intelligent service requests
+    Route::post('assistant/interpret-service-request', ServiceRequestAssistantController::class)
+        ->middleware('throttle:10,1');
+    Route::get('service-requests', [ServiceRequestController::class, 'index']);
+    Route::post('service-requests', [ServiceRequestController::class, 'store']);
+    Route::get('service-requests/{serviceRequest}', [ServiceRequestController::class, 'show']);
+    Route::patch('service-requests/{serviceRequest}/cancel', [ServiceRequestController::class, 'cancel']);
+    Route::post('service-request-proposals/{proposal}/accept', [ServiceRequestProposalController::class, 'accept']);
+    Route::patch('service-request-proposals/{proposal}/decline', [ServiceRequestProposalController::class, 'decline']);
+
     // Provider Reservations Routes
     Route::get('provider/reservations', [ReservationController::class, 'providerIndex']);
     Route::get('provider/availability', [ProviderAvailabilityController::class, 'show']);
@@ -55,6 +69,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::patch('provider/reservations/{reservation}/confirm', [ReservationController::class, 'providerConfirm']);
     Route::patch('provider/reservations/{reservation}/cancel', [ReservationController::class, 'providerCancel']);
     Route::patch('provider/reservations/{reservation}/complete', [ReservationController::class, 'providerComplete']);
+    Route::get('provider/service-requests', [ProviderServiceRequestController::class, 'index']);
+    Route::put('provider/service-requests/{serviceRequest}/proposal', [ProviderServiceRequestController::class, 'upsertProposal']);
+    Route::patch('provider/service-request-proposals/{proposal}/withdraw', [ProviderServiceRequestController::class, 'withdrawProposal']);
 
     // Reviews Routes
     Route::post('reviews', [ReviewController::class, 'store']);

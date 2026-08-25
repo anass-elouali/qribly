@@ -10,6 +10,8 @@ const OfferFormView = () => import('@/views/offers/OfferFormView.vue')
 const ProfileView = () => import('@/views/profile/ProfileView.vue')
 const NearbyView = () => import('@/views/offers/NearbyView.vue')
 const MessagesView = () => import('@/views/messages/MessagesView.vue')
+const ServiceRequestView = () => import('@/views/ServiceRequestView.vue')
+const ServiceRequestTrackingView = () => import('@/views/ServiceRequestTrackingView.vue')
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -20,9 +22,9 @@ const router = createRouter({
 
       children: [
         {
-          path:'',
-          name:'home',
-          component:HomeView,
+          path: '',
+          name: 'home',
+          component: HomeView,
         },
         {
           path: 'offers/nouvelle',
@@ -51,12 +53,28 @@ const router = createRouter({
           component: NearbyView,
         },
         {
-          path:'profile',
-          name:'profile',
-          component:ProfileView,
+          path: 'demander-a-qrib',
+          name: 'service-request-create',
+          component: ServiceRequestView,
           meta: {
-            requiresAuth:true,
-          }
+            requiresAuth: true,
+          },
+        },
+        {
+          path: 'demandes/:id',
+          name: 'service-request-details',
+          component: ServiceRequestTrackingView,
+          meta: {
+            requiresAuth: true,
+          },
+        },
+        {
+          path: 'profile',
+          name: 'profile',
+          component: ProfileView,
+          meta: {
+            requiresAuth: true,
+          },
         },
         {
           path: 'messages',
@@ -79,9 +97,9 @@ const router = createRouter({
           name: 'search',
           component: () => import('@/views/SearchView.vue'),
         },
-      ]
+      ],
     },
-     {
+    {
       path: '/login',
       name: 'login',
       component: LoginView,
@@ -94,21 +112,15 @@ const router = createRouter({
       name: 'register',
       component: RegisterView,
     },
-
-    
   ],
 })
 
-
-
-
-router.beforeEach((to, from)=>{
+router.beforeEach((to, from) => {
   const authStore = useAuthStore()
 
   if (to.meta.requiresAuth && !authStore.isAuthenticated) {
-    return {name: 'login'}
+    return { name: 'login' }
   }
-
 
   if (to.meta.requiresGuest && authStore.isAuthenticated) {
     return { name: 'home' }
