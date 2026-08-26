@@ -303,6 +303,58 @@ class ServiceRequestInterpreterTest(unittest.TestCase):
         self.assertFalse(result.at_home)
         self.assertEqual([], result.missing_fields)
 
+    def test_finalization_preserves_explicit_casablanca_time_range(self) -> None:
+        request = self.request(
+            "Je cherche un professeur d'arabe à Rabat le 28/08/2026 "
+            "de 14:00 à 18:00, à domicile."
+        )
+        draft = LlmInterpretationDraft(
+            summary="Cours d'arabe à domicile à Rabat le 28 août de 14 h à 18 h.",
+            category_id=2,
+            category_name="Éducation",
+            city="Rabat",
+            # Simule l'erreur observée : le LLM marque les heures locales comme UTC.
+            desired_start_at=datetime(2026, 8, 28, 14, 0, tzinfo=timezone.utc),
+            desired_end_at=datetime(2026, 8, 28, 18, 0, tzinfo=timezone.utc),
+            budget_max=Decimal("200"),
+            at_home=True,
+        )
+
+        result = _finalize_interpretation(request, draft)
+
+        self.assertEqual(
+            datetime(2026, 8, 28, 13, 0, tzinfo=timezone.utc),
+            result.desired_start_at,
+        )
+        self.assertEqual(
+            datetime(2026, 8, 28, 17, 0, tzinfo=timezone.utc),
+            result.desired_end_at,
+        )
+
+    @patch.dict(os.environ, {}, clear=True)
+    @patch("app.interpreter._classify_category")
+    def test_local_interpreter_preserves_an_explicit_time_range(
+        self,
+        classify_category,
+    ) -> None:
+        classify_category.return_value = self.categories[1]
+
+        result = interpret_service_request(
+            self.request(
+                "Je cherche un professeur à Rabat le 28/08/2026 "
+                "entre 14h et 18h, à domicile."
+            )
+        )
+
+        self.assertEqual(
+            datetime(2026, 8, 28, 13, 0, tzinfo=timezone.utc),
+            result.data.desired_start_at,
+        )
+        self.assertEqual(
+            datetime(2026, 8, 28, 17, 0, tzinfo=timezone.utc),
+            result.data.desired_end_at,
+        )
+
     def test_rejects_category_and_city_values_outside_the_allowed_lists(self) -> None:
         request = self.request(
             "Je cherche un plombier à Rabat demain pour mon appartement."

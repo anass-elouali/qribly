@@ -174,7 +174,10 @@ def _interpret_with_llm(
             "déductible, renvoie null. Résous aujourd'hui et demain à partir de current_time "
             "dans le fuseau Africa/Casablanca. Pour une date sans heure, utilise 08:00 à "
             "20:00. Pour une heure explicite, utilise cette heure comme début et ajoute "
-            "quatre heures comme fin. Les dates doivent être ISO 8601 avec fuseau horaire. "
+            "quatre heures comme fin. Si le texte contient une heure de début et une heure "
+            "de fin, conserve exactement les deux. Toutes les heures saisies par l'utilisateur "
+            "sont des heures locales Africa/Casablanca. Les dates doivent être ISO 8601 avec "
+            "le décalage correct de ce fuseau, et non être marquées UTC sans conversion. "
             "Le résumé doit rester fidèle au besoin et ne contenir aucune coordonnée personnelle."
         ),
         "input": json.dumps(context, ensure_ascii=False),
@@ -303,6 +306,12 @@ def _finalize_interpretation(
         draft.desired_end_at,
         request.current_time,
     )
+    start, end = _preserve_explicit_local_time_range(
+        request.raw_text,
+        start,
+        end,
+        request.current_time,
+    )
     # The LLM sometimes guesses at_home even without an explicit cue in the
     # text, contradicting its own instructions. Since this field affects
     # provider-location matching, only trust the deterministic local
@@ -416,7 +425,17 @@ def _extract_period(
 ) -> tuple[datetime | None, datetime | None]:
     normalized = _normalize(raw_text)
     now_local = _ensure_timezone(current_time).astimezone(MOROCCO_TIMEZONE)
-    requested_time = _extract_clock_time(normalized)
+    requested_time_range = _extract_clock_time_range(raw_text)
+    requested_time = (
+        requested_time_range[0]
+        if requested_time_range is not None
+        else _extract_clock_time(normalized)
+    )
+    requested_end_time = (
+        requested_time_range[1]
+        if requested_time_range is not None
+        else None
+    )
     requested_date = None
     full_day = False
 
@@ -445,7 +464,16 @@ def _extract_period(
     if requested_date is not None:
         if requested_time is not None:
             start = datetime.combine(requested_date, requested_time, MOROCCO_TIMEZONE)
-            end = start + timedelta(hours=4)
+            if requested_end_time is None:
+                end = start + timedelta(hours=4)
+            else:
+                end = datetime.combine(
+                    requested_date,
+                    requested_end_time,
+                    MOROCCO_TIMEZONE,
+                )
+                if end <= start:
+                    end += timedelta(days=1)
         elif full_day:
             start = datetime.combine(requested_date, time(8, 0), MOROCCO_TIMEZONE)
             end = datetime.combine(requested_date, time(20, 0), MOROCCO_TIMEZONE)
@@ -476,6 +504,50 @@ def _extract_clock_time(normalized_text: str) -> time | None:
         return None
 
     return time(int(match.group(1)), int(match.group(2) or 0))
+
+
+def _extract_clock_time_range(raw_text: str) -> tuple[time, time] | None:
+    match = re.search(
+        r"\b([01]?\d|2[0-3])\s*(?:h|:)\s*([0-5]\d)?\s*"
+        r"(?:et|a|à|-|–|—|→)\s*"
+        r"([01]?\d|2[0-3])\s*(?:h|:)\s*([0-5]\d)?\b",
+        raw_text.casefold(),
+    )
+    if not match:
+        return None
+
+    return (
+        time(int(match.group(1)), int(match.group(2) or 0)),
+        time(int(match.group(3)), int(match.group(4) or 0)),
+    )
+
+
+def _preserve_explicit_local_time_range(
+    raw_text: str,
+    start: datetime | None,
+    end: datetime | None,
+    current_time: datetime,
+) -> tuple[datetime | None, datetime | None]:
+    requested_range = _extract_clock_time_range(raw_text)
+    if requested_range is None or start is None or end is None:
+        return start, end
+
+    requested_start_time, requested_end_time = requested_range
+    requested_date = _ensure_timezone(start).astimezone(MOROCCO_TIMEZONE).date()
+    corrected_start = datetime.combine(
+        requested_date,
+        requested_start_time,
+        MOROCCO_TIMEZONE,
+    )
+    corrected_end = datetime.combine(
+        requested_date,
+        requested_end_time,
+        MOROCCO_TIMEZONE,
+    )
+    if corrected_end <= corrected_start:
+        corrected_end += timedelta(days=1)
+
+    return _validated_period(corrected_start, corrected_end, current_time)
 
 
 def _validated_period(
