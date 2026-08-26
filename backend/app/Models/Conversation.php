@@ -11,6 +11,7 @@ class Conversation extends Model
     protected $fillable = [
         'user_one_id',
         'user_two_id',
+        'service_request_proposal_id',
     ];
 
     public function userOne(): BelongsTo
@@ -21,6 +22,11 @@ class Conversation extends Model
     public function userTwo(): BelongsTo
     {
         return $this->belongsTo(User::class, 'user_two_id');
+    }
+
+    public function serviceRequestProposal(): BelongsTo
+    {
+        return $this->belongsTo(ServiceRequestProposal::class);
     }
 
     public function messages(): HasMany

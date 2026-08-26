@@ -10,24 +10,30 @@ import {
   Inbox,
   LoaderCircle,
   MapPin,
+  MessageCircle,
   RefreshCw,
   Tag,
   UsersRound,
   X,
 } from 'lucide-vue-next'
 import { computed, onMounted, ref } from 'vue'
-import { RouterLink, useRoute } from 'vue-router'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 
+import api from '@/services/api'
 import {
   acceptServiceRequestProposal,
   declineServiceRequestProposal,
   fetchServiceRequest,
 } from '@/services/serviceRequests'
 import type { ServiceRequest, ServiceRequestProposal } from '@/types/serviceRequest'
+import type { Conversation } from '@/types/conversation'
+import { useChatStore } from '@/stores/chat'
 import { inAppTimeZone } from '@/utils/dateTime'
 import { extractErrorMessage } from '@/utils/errors'
 
 const route = useRoute()
+const router = useRouter()
+const chatStore = useChatStore()
 const serviceRequest = ref<ServiceRequest | null>(null)
 const loading = ref(true)
 const error = ref('')
@@ -35,6 +41,7 @@ const actingProposalId = ref<number | null>(null)
 const actingAction = ref<'accept' | 'decline' | null>(null)
 const actionError = ref('')
 const actionSuccess = ref('')
+const discussingProposalId = ref<number | null>(null)
 
 const requestId = computed(() => Number(route.params.id))
 const proposals = computed(() => serviceRequest.value?.proposals ?? [])
@@ -149,6 +156,33 @@ async function declineProposal(proposal: ServiceRequestProposal) {
   } finally {
     actingProposalId.value = null
     actingAction.value = null
+  }
+}
+
+async function discussProposal(proposal: ServiceRequestProposal) {
+  if (!proposal.provider || discussingProposalId.value !== null) return
+
+  discussingProposalId.value = proposal.id
+  actionError.value = ''
+  actionSuccess.value = ''
+
+  try {
+    const response = await api.post<Conversation>(
+      `/service-request-proposals/${proposal.id}/conversation`,
+    )
+
+    chatStore.upsertConversation(response.data)
+    await router.push({
+      name: 'conversation',
+      params: { id: response.data.id },
+    })
+  } catch (exception) {
+    actionError.value = extractErrorMessage(
+      exception,
+      'Impossible d’ouvrir la discussion avec ce prestataire.',
+    )
+  } finally {
+    discussingProposalId.value = null
   }
 }
 
@@ -340,6 +374,9 @@ onMounted(loadRequest)
               v-if="proposal.message"
               class="mt-3 rounded-lg bg-ground p-3 text-sm leading-6 text-ink/65"
             >
+              <span class="mb-1 block text-xs font-semibold text-ink/45 uppercase">
+                Message du prestataire
+              </span>
               {{ proposal.message }}
             </p>
 
@@ -349,7 +386,16 @@ onMounted(loadRequest)
             >
               <button
                 type="button"
-                :disabled="actingProposalId !== null"
+                :disabled="actingProposalId !== null || discussingProposalId !== null"
+                class="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg border border-primary/25 px-4 text-sm font-semibold text-primary transition hover:bg-primary/5 disabled:cursor-not-allowed disabled:opacity-50"
+                @click="discussProposal(proposal)"
+              >
+                <MessageCircle :size="15" aria-hidden="true" />
+                {{ discussingProposalId === proposal.id ? 'Ouverture…' : 'Discuter' }}
+              </button>
+              <button
+                type="button"
+                :disabled="actingProposalId !== null || discussingProposalId !== null"
                 class="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg bg-status-active px-4 text-sm font-semibold text-surface transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
                 @click="acceptProposal(proposal)"
               >
@@ -362,7 +408,7 @@ onMounted(loadRequest)
               </button>
               <button
                 type="button"
-                :disabled="actingProposalId !== null"
+                :disabled="actingProposalId !== null || discussingProposalId !== null"
                 class="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg border border-ink/15 px-4 text-sm font-semibold text-ink/60 transition hover:border-status-reserved/40 hover:text-status-reserved disabled:cursor-not-allowed disabled:opacity-50"
                 @click="declineProposal(proposal)"
               >

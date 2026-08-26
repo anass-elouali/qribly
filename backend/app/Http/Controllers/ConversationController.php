@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Resources\ConversationResource;
 use App\Models\Conversation;
+use App\Models\ServiceRequestProposal;
 use App\Models\User;
 use Illuminate\Http\Request;
 
@@ -18,6 +20,8 @@ class ConversationController extends Controller
             ->with([
                 'userOne',
                 'userTwo',
+                'serviceRequestProposal.serviceRequest',
+                'serviceRequestProposal.offer',
                 'messages' => function ($query) {
                     $query->latest()->limit(1);
                 },
@@ -25,7 +29,11 @@ class ConversationController extends Controller
             ->latest('updated_at')
             ->get();
 
-        return response()->json($conversations);
+        return response()->json(
+            $conversations->map(
+                fn (Conversation $conversation) => $this->resource($request, $conversation),
+            ),
+        );
     }
 
     public function store(Request $request)
@@ -44,13 +52,17 @@ class ConversationController extends Controller
         }
 
         $conversation = Conversation::query()
+            ->whereNull('service_request_proposal_id')
             ->where(function ($query) use ($currentUser, $otherUserId) {
-                $query->where('user_one_id', $currentUser->id)
-                    ->where('user_two_id', $otherUserId);
-            })
-            ->orWhere(function ($query) use ($currentUser, $otherUserId) {
-                $query->where('user_one_id', $otherUserId)
-                    ->where('user_two_id', $currentUser->id);
+                $query
+                    ->where(function ($participants) use ($currentUser, $otherUserId) {
+                        $participants->where('user_one_id', $currentUser->id)
+                            ->where('user_two_id', $otherUserId);
+                    })
+                    ->orWhere(function ($participants) use ($currentUser, $otherUserId) {
+                        $participants->where('user_one_id', $otherUserId)
+                            ->where('user_two_id', $currentUser->id);
+                    });
             })
             ->first();
 
@@ -64,8 +76,58 @@ class ConversationController extends Controller
         $conversation->load([
             'userOne',
             'userTwo',
+            'serviceRequestProposal.serviceRequest',
+            'serviceRequestProposal.offer',
         ]);
 
-        return response()->json($conversation, 201);
+        return response()->json($this->resource($request, $conversation), 201);
+    }
+
+    public function forServiceRequestProposal(
+        Request $request,
+        ServiceRequestProposal $proposal,
+    ) {
+        $proposal->loadMissing(['serviceRequest', 'offer']);
+
+        $currentUserId = $request->user()->id;
+        $customerId = $proposal->serviceRequest->user_id;
+        $providerId = $proposal->provider_id;
+
+        abort_unless(
+            $currentUserId === $customerId || $currentUserId === $providerId,
+            403,
+            'Vous ne participez pas à cette proposition.',
+        );
+
+        [$userOneId, $userTwoId] = collect([$customerId, $providerId])
+            ->sort()
+            ->values()
+            ->all();
+
+        $conversation = Conversation::query()->firstOrCreate([
+            'user_one_id' => $userOneId,
+            'user_two_id' => $userTwoId,
+            'service_request_proposal_id' => $proposal->id,
+        ]);
+
+        $conversation->load([
+            'userOne',
+            'userTwo',
+            'serviceRequestProposal.serviceRequest',
+            'serviceRequestProposal.offer',
+            'messages' => function ($query) {
+                $query->latest()->limit(1);
+            },
+        ]);
+
+        return response()->json(
+            $this->resource($request, $conversation),
+            $conversation->wasRecentlyCreated ? 201 : 200,
+        );
+    }
+
+    private function resource(Request $request, Conversation $conversation): array
+    {
+        return (new ConversationResource($conversation))->resolve($request);
     }
 }

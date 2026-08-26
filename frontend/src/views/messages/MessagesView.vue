@@ -15,6 +15,7 @@ import echo from '@/echo'
 import { useAuthStore } from '@/stores/auth'
 import { useChatStore } from '@/stores/chat'
 import { initials } from '@/utils/user'
+import { inAppTimeZone } from '@/utils/dateTime'
 
 import type { Conversation, Message } from '@/types/conversation'
 import type { PaginatedResponse } from '@/types/offer'
@@ -38,6 +39,24 @@ const activeId = computed(() =>
 const activeConversation = computed<Conversation | undefined>(() =>
   chatStore.conversations.find((conversation) => conversation.id === activeId.value),
 )
+
+const proposalContext = computed(() => activeConversation.value?.proposal_context ?? null)
+
+function formatPrice(value: string): string {
+  return `${new Intl.NumberFormat('fr-MA', { maximumFractionDigits: 2 }).format(Number(value))} DH`
+}
+
+function conversationPreview(conversation: Conversation): string {
+  if (conversation.messages?.[0]) {
+    return conversation.messages[0].body
+  }
+
+  if (conversation.proposal_context) {
+    return `Proposition · ${conversation.proposal_context.offer_title}`
+  }
+
+  return 'Nouvelle conversation'
+}
 
 /*
 |--------------------------------------------------------------------------
@@ -365,7 +384,7 @@ onBeforeUnmount(unsubscribe)
                       : 'text-ink/45'
                   "
                 >
-                  {{ conversation.messages?.[0]?.body ?? 'Nouvelle conversation' }}
+                  {{ conversationPreview(conversation) }}
                 </span>
               </span>
 
@@ -434,10 +453,6 @@ onBeforeUnmount(unsubscribe)
             <p class="truncate font-body font-semibold text-ink">
               {{ otherName(activeConversation) }}
             </p>
-
-            <p class="font-mono text-[0.6rem] tracking-wide text-ink/35 uppercase">
-              Conversation
-            </p>
           </div>
         </header>
 
@@ -456,33 +471,104 @@ onBeforeUnmount(unsubscribe)
             </p>
           </div>
 
-          <!-- Empty thread -->
-          <div
-            v-else-if="messages.length === 0"
-            class="flex h-full items-center justify-center"
-          >
-            <div class="max-w-xs text-center">
-              <div
-                class="mx-auto flex h-12 w-12 items-center justify-center rounded-full border border-ink/10 bg-surface"
-              >
-                <span class="h-2 w-2 rounded-full bg-primary" />
-              </div>
-
-              <p class="mt-4 font-display font-semibold text-ink">
-                Commencez la conversation
-              </p>
-
-              <p class="mt-1 font-body text-sm leading-relaxed text-ink/45">
-                Envoyez un message pour commencer à échanger.
-              </p>
-            </div>
-          </div>
-
-          <!-- Message list -->
+          <!-- Thread content -->
           <div
             v-else
             class="mx-auto flex w-full max-w-3xl flex-col gap-4"
           >
+            <!-- Proposal context as the first system message -->
+            <article
+              v-if="proposalContext"
+              class="rounded-2xl border border-primary/15 bg-primary/[0.05] p-4 shadow-sm sm:p-5"
+              aria-label="Proposition liée à cette conversation"
+            >
+              <div class="flex items-center gap-3">
+                <span
+                  class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary"
+                  aria-hidden="true"
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                    class="h-4 w-4"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      d="M12 6v12m3-9.5c0-1.1-1.34-2-3-2s-3 .9-3 2 1.34 2 3 2 3 .9 3 2-1.34 2-3 2-3-.9-3-2"
+                    />
+                  </svg>
+                </span>
+
+                <div class="min-w-0 flex-1">
+                  <p class="font-mono text-[0.6rem] tracking-[0.16em] text-primary uppercase">
+                    Proposition envoyée · Demande n°{{ proposalContext.service_request_id }}
+                  </p>
+                  <p class="mt-0.5 truncate text-sm font-semibold text-ink">
+                    {{ proposalContext.offer_title }}
+                  </p>
+                </div>
+              </div>
+
+              <div class="mt-4 grid gap-3 rounded-xl border border-ink/[0.07] bg-surface/75 p-3 sm:grid-cols-2">
+                <div>
+                  <p class="font-mono text-[0.55rem] tracking-wide text-ink/35 uppercase">
+                    Prix proposé
+                  </p>
+                  <p class="mt-1 font-display text-lg font-semibold text-primary">
+                    {{ formatPrice(proposalContext.proposed_price) }}
+                  </p>
+                </div>
+                <div>
+                  <p class="font-mono text-[0.55rem] tracking-wide text-ink/35 uppercase">
+                    Rendez-vous proposé
+                  </p>
+                  <p class="mt-1 text-sm font-semibold text-ink">
+                    {{ inAppTimeZone(proposalContext.scheduled_at).format('DD/MM/YYYY · HH:mm') }}
+                  </p>
+                </div>
+              </div>
+
+              <p class="mt-3 text-xs leading-5 text-ink/55">
+                {{ proposalContext.request_summary }}
+              </p>
+
+              <p
+                v-if="proposalContext.message"
+                class="mt-3 rounded-xl border border-ink/[0.07] bg-surface px-3 py-2.5 text-sm leading-5 text-ink/70"
+              >
+                <span class="block font-mono text-[0.55rem] tracking-wide text-ink/35 uppercase">
+                  Message du prestataire
+                </span>
+                <span class="mt-1 block">{{ proposalContext.message }}</span>
+              </p>
+            </article>
+
+            <!-- Empty thread -->
+            <div
+              v-if="messages.length === 0"
+              class="flex min-h-56 items-center justify-center"
+            >
+              <div class="max-w-xs text-center">
+                <div
+                  class="mx-auto flex h-12 w-12 items-center justify-center rounded-full border border-ink/10 bg-surface"
+                >
+                  <span class="h-2 w-2 rounded-full bg-primary" />
+                </div>
+
+                <p class="mt-4 font-display font-semibold text-ink">
+                  Commencez la conversation
+                </p>
+
+                <p class="mt-1 font-body text-sm leading-relaxed text-ink/45">
+                  Envoyez un message pour commencer à échanger.
+                </p>
+              </div>
+            </div>
+
+            <!-- Message list -->
             <div
               v-for="message in messages"
               :key="message.id"

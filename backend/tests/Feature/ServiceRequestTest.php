@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Category;
+use App\Models\Conversation;
 use App\Models\Offer;
 use App\Models\Reservation;
 use App\Models\ServiceRequest;
@@ -1118,6 +1119,98 @@ class ServiceRequestTest extends TestCase
             ->patchJson("/api/service-request-proposals/{$proposal->id}/decline")
             ->assertSuccessful()
             ->assertJsonPath('data.status', 'declined');
+    }
+
+    public function test_customer_and_provider_share_a_private_conversation_with_proposal_context(): void
+    {
+        $customer = User::factory()->create();
+        $provider = User::factory()->create();
+        $category = Category::create(['name' => 'Services']);
+        $offer = $this->createService($provider, $category);
+        $serviceRequest = $this->createServiceRequest($customer, $category);
+        $proposal = $this->createProposal($serviceRequest, $provider, $offer);
+
+        $response = $this
+            ->actingAs($customer)
+            ->postJson("/api/service-request-proposals/{$proposal->id}/conversation")
+            ->assertCreated()
+            ->assertJsonPath('proposal_context.proposal_id', $proposal->id)
+            ->assertJsonPath('proposal_context.service_request_id', $serviceRequest->id)
+            ->assertJsonPath('proposal_context.request_summary', $serviceRequest->summary)
+            ->assertJsonPath('proposal_context.offer_title', $offer->title)
+            ->assertJsonPath('proposal_context.proposed_price', '250.00')
+            ->assertJsonPath('proposal_context.message', 'Je suis disponible pour cette intervention.');
+
+        $conversationId = $response->json('id');
+
+        $this
+            ->actingAs($provider)
+            ->postJson("/api/service-request-proposals/{$proposal->id}/conversation")
+            ->assertSuccessful()
+            ->assertJsonPath('id', $conversationId);
+
+        $this
+            ->actingAs($provider)
+            ->getJson('/api/conversations')
+            ->assertSuccessful()
+            ->assertJsonCount(1)
+            ->assertJsonPath('0.id', $conversationId)
+            ->assertJsonPath('0.proposal_context.proposal_id', $proposal->id)
+            ->assertJsonPath('0.proposal_context.request_summary', $serviceRequest->summary);
+
+        $this->assertDatabaseCount('conversations', 1);
+        $this->assertDatabaseHas('conversations', [
+            'id' => $conversationId,
+            'service_request_proposal_id' => $proposal->id,
+        ]);
+    }
+
+    public function test_unrelated_user_cannot_open_a_proposal_conversation(): void
+    {
+        $customer = User::factory()->create();
+        $provider = User::factory()->create();
+        $outsider = User::factory()->create();
+        $category = Category::create(['name' => 'Services']);
+        $offer = $this->createService($provider, $category);
+        $serviceRequest = $this->createServiceRequest($customer, $category);
+        $proposal = $this->createProposal($serviceRequest, $provider, $offer);
+
+        $this
+            ->actingAs($outsider)
+            ->postJson("/api/service-request-proposals/{$proposal->id}/conversation")
+            ->assertForbidden();
+
+        $this->assertDatabaseCount('conversations', 0);
+    }
+
+    public function test_general_and_proposal_conversations_are_kept_separate(): void
+    {
+        $customer = User::factory()->create();
+        $provider = User::factory()->create();
+        $category = Category::create(['name' => 'Services']);
+        $offer = $this->createService($provider, $category);
+        $serviceRequest = $this->createServiceRequest($customer, $category);
+        $proposal = $this->createProposal($serviceRequest, $provider, $offer);
+
+        $generalConversationId = $this
+            ->actingAs($customer)
+            ->postJson('/api/conversations', ['user_id' => $provider->id])
+            ->assertCreated()
+            ->json('id');
+
+        $proposalConversationId = $this
+            ->actingAs($customer)
+            ->postJson("/api/service-request-proposals/{$proposal->id}/conversation")
+            ->assertCreated()
+            ->json('id');
+
+        $this->assertNotSame($generalConversationId, $proposalConversationId);
+        $this->assertDatabaseCount('conversations', 2);
+        $this->assertNull(Conversation::findOrFail($generalConversationId)->service_request_proposal_id);
+        $this->assertSame(
+            $proposal->id,
+            Conversation::findOrFail($proposalConversationId)->service_request_proposal_id,
+        );
     }
 
     public function test_provider_can_withdraw_and_resubmit_a_proposal(): void

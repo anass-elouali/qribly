@@ -92,6 +92,10 @@ Route::middleware('auth:sanctum')->group(function () {
     // Conversations Routes
     Route::get('conversations', [ConversationController::class, 'index']);
     Route::post('conversations', [ConversationController::class, 'store']);
+    Route::post(
+        'service-request-proposals/{proposal}/conversation',
+        [ConversationController::class, 'forServiceRequestProposal'],
+    );
 
     // Messages Routes
     Route::get('conversations/{conversation}/messages', [MessageController::class, 'index']);
