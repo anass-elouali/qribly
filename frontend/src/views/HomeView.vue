@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import api from '@/services/api'
 import { fetchCategories } from '@/services/categories'
@@ -8,12 +8,52 @@ import OfferCard from '@/components/offers/OfferCard.vue'
 import OfferGridSkeleton from '@/components/offers/OfferGridSkeleton.vue'
 import QriblyLogo from '@/components/branding/QriblyLogo.vue'
 import AsyncStatePanel from '@/components/ui/AsyncStatePanel.vue'
+import FeaturedOffersCarousel from '@/components/home/FeaturedOffersCarousel.vue'
+import CategoryShowcase from '@/components/home/CategoryShowcase.vue'
+import SpotlightBanner from '@/components/home/SpotlightBanner.vue'
 import type { Category, Offer, PaginatedResponse } from '@/types/offer'
 
 const router = useRouter()
 
 const offers = ref<Offer[]>([])
 const categories = ref<Category[]>([])
+
+// A broader, unfiltered pool of offers fetched once, used only to source real
+// photos for the homepage's visual sections (carousel, category tiles, spotlight)
+// without adding new backend endpoints or affecting the paginated grid below.
+const showcasePool = ref<Offer[]>([])
+
+const categoryImages = computed(() => {
+  const images: Record<number, string | null> = {}
+
+  for (const category of categories.value) {
+    const match = showcasePool.value.find(
+      (offer) => offer.category?.id === category.id && offer.images?.[0],
+    )
+    images[category.id] = match?.images?.[0]?.url ?? null
+  }
+
+  return images
+})
+
+const featuredOffers = computed(() =>
+  showcasePool.value.filter((offer) => offer.status === 'active' && offer.images?.length).slice(0, 8),
+)
+
+const spotlightOffer = computed(() => featuredOffers.value[0] ?? null)
+
+async function loadShowcasePool() {
+  try {
+    const response = await api.get<PaginatedResponse<Offer>>('/offers', {
+      params: { per_page: 80 },
+    })
+
+    showcasePool.value = response.data.data
+  } catch {
+    // Purely decorative data — a failure here shouldn't block the rest of the
+    // homepage, so the carousel/category photos/spotlight simply stay empty.
+  }
+}
 
 const selectedCategory = ref<number | null>(null)
 const selectedType = ref<'product' | 'service' | null>(null)
@@ -116,7 +156,7 @@ function resetOfferFilters() {
 watch([selectedCategory, selectedType, page], loadOffers)
 
 onMounted(() => {
-  Promise.all([loadCategories(), loadOffers()])
+  Promise.all([loadCategories(), loadOffers(), loadShowcasePool()])
 })
 </script>
 
@@ -205,126 +245,93 @@ onMounted(() => {
       </div>
     </section>
 
+    <!-- Spotlight -->
+    <SpotlightBanner v-if="spotlightOffer" :offer="spotlightOffer" />
+
+    <!-- Featured carousel -->
+    <FeaturedOffersCarousel v-if="featuredOffers.length > 0" :offers="featuredOffers" />
+
+    <!-- Category showcase -->
+    <section v-if="!categoriesError" class="mb-12">
+      <template v-if="categoriesLoading">
+        <h2 class="mb-5 font-display text-2xl font-bold text-ink sm:text-3xl">
+          Parcourir par catégorie
+        </h2>
+        <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+          <span
+            v-for="index in 5"
+            :key="index"
+            class="aspect-[4/3] animate-pulse rounded-xl bg-ink/10 motion-reduce:animate-none"
+            aria-hidden="true"
+          />
+        </div>
+        <span class="sr-only" role="status">Chargement des catégories…</span>
+      </template>
+
+      <CategoryShowcase
+        v-else
+        :categories="categories"
+        :category-images="categoryImages"
+        :selected-category="selectedCategory"
+        @select="selectCategory"
+      />
+    </section>
+
+    <div
+      v-else
+      class="mb-12 flex flex-wrap items-center gap-3 rounded-lg bg-status-reserved/5 px-4 py-3"
+      role="alert"
+    >
+      <p class="text-sm text-status-reserved">{{ categoriesError }}</p>
+      <button type="button" class="text-sm font-semibold text-primary hover:underline" @click="loadCategories">
+        Réessayer
+      </button>
+    </div>
+
     <!-- Filters -->
     <section class="mb-12">
-      <div
-        class="flex flex-col gap-6 rounded-xl border border-ink/10 bg-surface p-5 sm:flex-row sm:items-start sm:gap-8"
-      >
-        <!-- Type -->
-        <div class="sm:flex-1">
-          <h2 class="mb-3 font-display text-lg font-semibold text-ink">Type</h2>
+      <div class="rounded-xl border border-ink/10 bg-surface p-5">
+        <h2 class="mb-3 font-display text-lg font-semibold text-ink">Type</h2>
 
-          <div class="flex flex-wrap gap-1">
-            <button
-              type="button"
-              class="rounded-full border px-4 py-1.5 text-sm transition-colors"
-              :class="
-                selectedType === null
-                  ? 'border-primary bg-primary text-surface'
-                  : 'border-ink/15 text-ink/70 hover:border-primary hover:text-primary'
-              "
-              @click="selectType(null)"
-            >
-              Tout
-            </button>
+        <div class="flex flex-wrap gap-1">
+          <button
+            type="button"
+            class="rounded-full border px-4 py-1.5 text-sm transition-colors"
+            :class="
+              selectedType === null
+                ? 'border-primary bg-primary text-surface'
+                : 'border-ink/15 text-ink/70 hover:border-primary hover:text-primary'
+            "
+            @click="selectType(null)"
+          >
+            Tout
+          </button>
 
-            <button
-              type="button"
-              class="rounded-full border px-4 py-1.5 text-sm transition-colors"
-              :class="
-                selectedType === 'product'
-                  ? 'border-primary bg-primary text-surface'
-                  : 'border-ink/15 text-ink/70 hover:border-primary hover:text-primary'
-              "
-              @click="selectType('product')"
-            >
-              Produits
-            </button>
+          <button
+            type="button"
+            class="rounded-full border px-4 py-1.5 text-sm transition-colors"
+            :class="
+              selectedType === 'product'
+                ? 'border-primary bg-primary text-surface'
+                : 'border-ink/15 text-ink/70 hover:border-primary hover:text-primary'
+            "
+            @click="selectType('product')"
+          >
+            Produits
+          </button>
 
-            <button
-              type="button"
-              class="rounded-full border px-4 py-1.5 text-sm transition-colors"
-              :class="
-                selectedType === 'service'
-                  ? 'border-primary bg-primary text-surface'
-                  : 'border-ink/15 text-ink/70 hover:border-primary hover:text-primary'
-              "
-              @click="selectType('service')"
-            >
-              Services
-            </button>
-          </div>
-        </div>
-
-        <!-- Separator -->
-        <div class="hidden h-16 w-px bg-ink/10 sm:block"></div>
-        <div class="h-px w-full bg-ink/10 sm:hidden"></div>
-
-        <!-- Categories -->
-        <div class="sm:flex-[3]">
-          <h2 class="mb-3 font-display text-lg font-semibold text-ink">Catégories</h2>
-
-          <div class="flex flex-wrap gap-2">
-            <template v-if="categoriesLoading">
-              <span
-                v-for="index in 5"
-                :key="index"
-                class="h-8 animate-pulse rounded-full bg-ink/10 motion-reduce:animate-none"
-                :class="index % 2 === 0 ? 'w-24' : 'w-20'"
-                aria-hidden="true"
-              />
-
-              <span class="sr-only" role="status">Chargement des catégories…</span>
-            </template>
-
-            <div
-              v-else-if="categoriesError"
-              class="flex w-full flex-wrap items-center gap-3 rounded-lg bg-status-reserved/5 px-3 py-2"
-              role="alert"
-            >
-              <p class="text-sm text-status-reserved">
-                {{ categoriesError }}
-              </p>
-
-              <button
-                type="button"
-                class="text-sm font-semibold text-primary hover:underline"
-                @click="loadCategories"
-              >
-                Réessayer
-              </button>
-            </div>
-
-            <template v-else>
-              <button
-                type="button"
-                class="rounded-full border px-4 py-1.5 text-sm transition-colors"
-                :class="
-                  selectedCategory === null
-                    ? 'border-primary bg-primary text-surface'
-                    : 'border-ink/15 text-ink/70 hover:border-primary hover:text-primary'
-                "
-                @click="selectCategory(null)"
-              >
-                Toutes
-              </button>
-
-              <button
-                v-for="category in categories"
-                :key="category.id"
-                type="button"
-                class="rounded-full border px-4 py-1.5 text-sm transition-colors"
-                :class="
-                  selectedCategory === category.id
-                    ? 'border-primary bg-primary text-surface'
-                    : 'border-ink/15 text-ink/70 hover:border-primary hover:text-primary'
-                "
-                @click="selectCategory(category.id)"
-              >
-                {{ category.name }}
-              </button>
-            </template>
-          </div>
+          <button
+            type="button"
+            class="rounded-full border px-4 py-1.5 text-sm transition-colors"
+            :class="
+              selectedType === 'service'
+                ? 'border-primary bg-primary text-surface'
+                : 'border-ink/15 text-ink/70 hover:border-primary hover:text-primary'
+            "
+            @click="selectType('service')"
+          >
+            Services
+          </button>
         </div>
       </div>
     </section>
