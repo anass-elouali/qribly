@@ -22,16 +22,20 @@ services:
       DB_USERNAME: ${DB_USERNAME}
       DB_PASSWORD: ${DB_PASSWORD}
 
-    volumes:
-      - app_data:/var/www/html
+      REVERB_APP_ID: ${REVERB_APP_ID}
+      REVERB_APP_KEY: ${REVERB_APP_KEY}
+      REVERB_APP_SECRET: ${REVERB_APP_SECRET}
 
     depends_on:
       postgres:
         condition: service_healthy
 
+    expose:
+      - "8000"
 
-  nginx:
-    image: qribly-nginx:prod
+
+  frontend:
+    image: qribly-frontend:prod
     build:
       context: .
       dockerfile: docker/nginx/Dockerfile.prod
@@ -41,9 +45,6 @@ services:
     ports:
       - "80:80"
 
-    volumes:
-      - app_data:/var/www/html:ro
-
     depends_on:
       - backend
       - reverb
@@ -51,6 +52,7 @@ services:
 
   postgres:
     image: postgis/postgis:16-3.4
+
     restart: unless-stopped
 
     environment:
@@ -71,8 +73,10 @@ services:
       timeout: 5s
       retries: 10
 
+
   reverb:
     image: qribly-backend:prod
+
     restart: unless-stopped
 
     command: php artisan reverb:start --host=0.0.0.0 --port=8080
@@ -92,6 +96,7 @@ services:
       REVERB_APP_ID: ${REVERB_APP_ID}
       REVERB_APP_KEY: ${REVERB_APP_KEY}
       REVERB_APP_SECRET: ${REVERB_APP_SECRET}
+
       REVERB_HOST: 0.0.0.0
       REVERB_PORT: 8080
 
@@ -99,9 +104,16 @@ services:
       postgres:
         condition: service_healthy
 
+    healthcheck:
+      disable: true
+
+    expose:
+      - "8080"
+
 
   queue:
     image: qribly-backend:prod
+
     restart: unless-stopped
 
     command: php artisan queue:work --tries=3 --timeout=90
@@ -122,7 +134,9 @@ services:
       postgres:
         condition: service_healthy
 
+    healthcheck:
+      disable: true
+
 
 volumes:
-  app_data:
   postgres_data:

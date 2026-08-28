@@ -1,6 +1,6 @@
-FROM php:8.4-fpm
+FROM dunglas/frankenphp:php8.4-bookworm
 
-WORKDIR /var/www/html
+WORKDIR /app
 
 # System dependencies
 RUN apt-get update && apt-get install -y \
@@ -15,11 +15,7 @@ RUN apt-get update && apt-get install -y \
     libfreetype6-dev \
     libonig-dev \
     libxml2-dev \
-    && docker-php-ext-configure gd \
-    --with-freetype \
-    --with-jpeg \
-    --with-webp \
-    && docker-php-ext-install -j$(nproc) \
+    && install-php-extensions \
     pdo_pgsql \
     mbstring \
     exif \
@@ -44,26 +40,28 @@ RUN composer install \
     --optimize-autoloader \
     --no-scripts
 
-# Copy application
+# Copy Laravel application
 COPY . .
 
 # Laravel writable directories
-RUN mkdir -p bootstrap/cache storage/framework/cache \
-    storage/framework/sessions storage/framework/views \
-    && chown -R www-data:www-data bootstrap/cache storage
+RUN mkdir -p \
+    bootstrap/cache \
+    storage/framework/cache \
+    storage/framework/sessions \
+    storage/framework/views \
+    && chown -R www-data:www-data \
+    bootstrap/cache \
+    storage
 
-# Generate optimized autoload files
+# Optimize Composer autoload
 RUN composer dump-autoload --optimize
 
-
 # Production PHP configuration
-RUN mv "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini"
+RUN cp "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini"
 
-# Laravel writable directories
-RUN chown -R www-data:www-data \
-    storage \
-    bootstrap/cache
+EXPOSE 8000
 
-EXPOSE 9000
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost:8000 || exit 1
 
-CMD ["php-fpm"]
+CMD ["frankenphp", "php-server", "--listen", ":8000", "--root", "/app/public"]
