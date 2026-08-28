@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { RouterLink, useRouter } from 'vue-router'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { isAxiosError } from 'axios'
 import { ChevronDown, MapPin, SlidersHorizontal, X } from 'lucide-vue-next'
 import api from '@/services/api'
@@ -18,6 +18,7 @@ import { statusLabel, statusColor, formatPrice, formatDistance } from '@/utils/o
 import { resolveStorageUrl } from '@/utils/url'
 
 const router = useRouter()
+const route = useRoute()
 
 type ViewMode = 'radar' | 'explorer' | 'immersive'
 type BrowseScope = 'all' | 'nearby' | 'city'
@@ -810,7 +811,12 @@ function handleFilterKeydown(event: KeyboardEvent) {
 }
 
 onMounted(() => {
-  void Promise.all([fetchAllOffers(), loadCategories()])
+  const requestedCity = typeof route.query.city === 'string' ? cityByName(route.query.city) : null
+
+  void Promise.all([
+    requestedCity ? fetchOffersByCity(requestedCity) : fetchAllOffers(),
+    loadCategories(),
+  ])
   document.addEventListener('keydown', handleFilterKeydown)
 })
 

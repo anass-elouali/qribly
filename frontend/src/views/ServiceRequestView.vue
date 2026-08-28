@@ -19,7 +19,7 @@ import {
   WandSparkles,
 } from 'lucide-vue-next'
 import { computed, onMounted, ref } from 'vue'
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRoute } from 'vue-router'
 
 import CityCombobox from '@/components/ui/CityCombobox.vue'
 import { moroccanCities, type CityOption } from '@/data/moroccanCities'
@@ -41,6 +41,7 @@ import { extractErrorMessage } from '@/utils/errors'
 const totalSteps = 4
 const step = ref(1)
 const rawText = ref('')
+const route = useRoute()
 const summary = ref('')
 const categories = ref<Category[]>([])
 const categoryId = ref<number | null>(null)
@@ -341,6 +342,9 @@ function restart() {
 }
 
 onMounted(async () => {
+  const initialRequest = typeof route.query.q === 'string' ? route.query.q.trim() : ''
+  if (initialRequest) rawText.value = initialRequest
+
   try {
     categories.value = await fetchCategories()
   } catch (err) {
